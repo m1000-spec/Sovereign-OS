@@ -1,4 +1,4 @@
-const GEMINI_API_KEY = "AIzaSyAij1xmZY2TD9MisoUGpT-kCXsYcLZUGhU";
+const VITE_GEMINI_API_KEY = "AIzaSyAij1xmZY2TD9MisoUGpT-kCXsYcLZUGhU";
 const SYSTEM_CONTEXT = "You are a trading co-pilot for an NQ futures trader. The trader uses a methodology called PB Trading Theory. Rules: one trade per day, 1% risk, trade only 9:30-11AM NY time. Entry is based on 5 minute FVG inversions. Only trade with the trend. Breakeven is moved at intermediate highs and lows. Assess the setup the trader describes and give a quick verdict: high probability, medium probability, or low probability. If high probability suggest they can risk up to 1.5%. Be concise, maximum 3 sentences.";
 
 // Inject UI
@@ -134,7 +134,7 @@ micBtn.addEventListener('click', () => {
 async function processSetup(text) {
   responseText.innerText = "Analyzing setup...";
   try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${VITE_GEMINI_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
