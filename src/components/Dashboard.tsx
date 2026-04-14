@@ -13,207 +13,184 @@ import {
   ClipboardList,
   BookOpen,
   Tag,
-  Bell
+  Bell,
+  LogOut,
+  Loader2,
+  MoreVertical,
+  Edit2,
+  Trash2,
+  CheckCircle2
 } from "lucide-react";
-import { motion } from "motion/react";
-import { cn } from "@/src/lib/utils";
+import { motion, AnimatePresence } from "motion/react";
+import { cn } from "../lib/utils";
 import MonthlyCalendar from "./MonthlyCalendar";
+import { TradeModal } from "./TradeModal";
+import { Header } from "./Header";
+import { supabase } from "../lib/supabase";
+import { Trade } from "../types";
+import { Tooltip } from "./Tooltip";
+import { useTradeStore } from "../store/useTradeStore";
+import { AIInsightsPanel } from "./AIInsightsPanel";
 
 interface DashboardProps {
-  onNavigate: (view: "dashboard" | "trades" | "analytics" | "reports" | "settings" | "daily-journal" | "landing" | "annotations") => void;
+  onNavigate: (view: "dashboard" | "trades" | "analytics" | "reports" | "settings" | "daily-journal" | "annotations") => void;
   isDark: boolean;
   setIsDark: (isDark: boolean) => void;
   openTradeModal: () => void;
+  onEditTrade: (trade: Trade) => void;
+  onLogout: () => void;
+  accountSize: string;
+  isCollapsed: boolean;
+  setIsCollapsed: (collapsed: boolean) => void;
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
 }
 
-export default function Dashboard({ onNavigate, isDark, setIsDark, openTradeModal }: DashboardProps) {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+export default function Dashboard({ 
+  onNavigate, 
+  isDark, 
+  setIsDark, 
+  openTradeModal, 
+  onEditTrade, 
+  onLogout, 
+  accountSize,
+  isCollapsed,
+  setIsCollapsed,
+  searchQuery,
+  setSearchQuery
+}: DashboardProps) {
+  const { trades, loading, totalNetProfit, winRate, avgRR, subscribeToTrades } = useTradeStore();
+
+  const filteredTrades = trades.filter(trade => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      trade.instrument.toLowerCase().includes(query) ||
+      trade.trade_date.toLowerCase().includes(query) ||
+      trade.setup.toLowerCase().includes(query) ||
+      trade.direction.toLowerCase().includes(query) ||
+      trade.session.toLowerCase().includes(query) ||
+      (trade.tags && trade.tags.toLowerCase().includes(query)) ||
+      (trade.notes && trade.notes.toLowerCase().includes(query))
+    );
+  });
+
+  useEffect(() => {
+    const unsubscribe = subscribeToTrades();
+    return () => unsubscribe();
+  }, [subscribeToTrades]);
+
+  const handleEditTrade = (trade: Trade) => {
+    onEditTrade(trade);
+  };
+
+  const handleDeleteTrade = async (id: string) => {
+    if (window.confirm("Are you sure you want to delete this trade?")) {
+      try {
+        const { error } = await supabase
+          .from('trades')
+          .delete()
+          .eq('id', id);
+        if (error) throw error;
+      } catch (error) {
+        console.error('Error deleting trade:', error);
+        alert('Failed to delete trade.');
+      }
+    }
+  };
+
+  const winRateFormatted = winRate.toFixed(1);
+  const totalPnL = totalNetProfit;
+  const avgRRFormatted = avgRR.toFixed(1);
+
+  const lastWeekTrades = filteredTrades.filter(trade => {
+    const tradeDate = new Date(trade.trade_date);
+    tradeDate.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const lastWeek = new Date(today);
+    lastWeek.setDate(today.getDate() - 7);
+    return tradeDate >= lastWeek;
+  });
+
+  const currentDate = new Date().toLocaleDateString('en-US', {
+    month: 'short',
+    day: '2-digit',
+    year: 'numeric'
+  });
 
   return (
-    <div className={cn("flex min-h-screen font-sans transition-colors duration-300", isDark ? "bg-black text-white" : "bg-white text-black")}>
-      {/* Sidebar */}
-      <motion.aside 
-        initial={false}
-        animate={{ width: isCollapsed ? 80 : 224 }}
-        className={cn(
-          "hidden md:flex flex-col h-screen fixed left-0 border-r z-40 transition-colors duration-300 overflow-hidden",
-          isDark ? "bg-black border-white/10" : "bg-white border-neutral-200"
-        )}
-      >
-        <div className="p-6 flex flex-col h-full">
-          <div className="mb-8 px-2 overflow-hidden">
-            <h1 className={cn(
-              "font-black italic tracking-tighter transition-all duration-300 leading-none", 
-              isDark ? "text-white" : "text-black",
-              isCollapsed ? "text-lg" : "text-xl"
-            )}>
-              {isCollapsed ? "SA" : "Sovereign Analyst"}
-            </h1>
-            {!isCollapsed && (
-              <p className="text-[10px] mt-1 uppercase tracking-[0.2em] font-bold text-[#00FF41]">
-                Premium Tier
-              </p>
-            )}
+    <div className="pt-20 px-4 md:px-6 pb-32 md:pb-16 space-y-4 w-full">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="w-full md:w-auto">
+          <AIInsightsPanel 
+            id="dashboard"
+            isDark={isDark}
+            data={trades.slice(0, 10).map(t => ({
+              setup: t.setup,
+              session: t.session,
+              pnl: t.pnl_amount,
+              result: t.pnl_amount > 0 ? 'Win' : t.pnl_amount < 0 ? 'Loss' : 'BE'
+            }))}
+            prompt="You are a trading coach. Analyze these trades and tell me: my strongest session, my weakest setup, my current win rate trend, and one thing I should focus on this week. Be concise and direct."
+          />
+        </div>
+        <div className="flex justify-end gap-2 w-full md:w-auto">
+          <div className={cn("px-3 py-1.5 border rounded-lg flex items-center gap-2", isDark ? "bg-[#0A0A0A] border-white/10" : "bg-neutral-100 border-neutral-200")}>
+            <div className="w-1.5 h-1.5 rounded-full bg-accent-green" />
+            <span className={cn("text-[9px] font-bold uppercase tracking-widest opacity-60", isDark ? "text-white" : "text-black")}>Live Market</span>
           </div>
-
-          <nav className="flex-1 space-y-2">
-            <NavItem 
-              icon={<LayoutDashboard size={18} />} 
-              label="Dashboard" 
-              active 
-              isCollapsed={isCollapsed}
-              onClick={() => onNavigate("dashboard")}
-              isDark={isDark} 
-            />
-            <NavItem 
-              icon={<FileText size={18} />} 
-              label="Daily Journal" 
-              isCollapsed={isCollapsed}
-              onClick={() => onNavigate("daily-journal")}
-              isDark={isDark} 
-            />
-            <NavItem 
-              icon={<ArrowLeftRight size={18} />} 
-              label="Trades" 
-              isCollapsed={isCollapsed}
-              onClick={() => onNavigate("trades")}
-              isDark={isDark} 
-            />
-            <NavItem 
-              icon={<BarChart3 size={18} />} 
-              label="Analytics" 
-              isCollapsed={isCollapsed}
-              onClick={() => onNavigate("analytics")}
-              isDark={isDark} 
-            />
-            <NavItem 
-              icon={<ClipboardList size={18} />} 
-              label="Reports" 
-              isCollapsed={isCollapsed}
-              onClick={() => onNavigate("reports")}
-              isDark={isDark} 
-            />
-            <NavItem 
-              icon={<Tag size={18} />} 
-              label="Annotations" 
-              isCollapsed={isCollapsed}
-              onClick={() => onNavigate("annotations")}
-              isDark={isDark} 
-            />
-          </nav>
-
-          <div className="mt-auto space-y-2">
-            <button 
-              onClick={() => setIsCollapsed(!isCollapsed)}
-              className={cn(
-                "w-full flex items-center justify-center py-3 transition-all duration-200 group rounded-xl",
-                isDark ? "text-neutral-400 hover:text-white hover:bg-white/5" : "text-neutral-500 hover:text-black hover:bg-neutral-100"
-              )}
-              title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-            >
-              <LayoutDashboard size={18} className={cn("transition-transform duration-300", isCollapsed && "rotate-180")} />
-            </button>
-
-            <NavItem 
-              icon={<Settings size={18} />} 
-              label="Settings" 
-              isCollapsed={isCollapsed}
-              isDark={isDark} 
-              onClick={() => onNavigate("settings")}
-            />
+          <div className={cn("px-3 py-1.5 border rounded-lg flex items-center", isDark ? "bg-[#0A0A0A] border-white/10" : "bg-neutral-100 border-neutral-200")}>
+            <span className={cn("text-[9px] font-bold uppercase tracking-widest opacity-60", isDark ? "text-white" : "text-black")}>{currentDate}</span>
           </div>
         </div>
-      </motion.aside>
+      </div>
 
-      {/* Main Content */}
-      <main className={cn("flex-1 flex flex-col transition-all duration-300", isCollapsed ? "md:ml-20" : "md:ml-56", isDark ? "bg-black" : "bg-neutral-50")}>
-        {/* Header */}
-        <header className={cn(
-          "fixed top-0 right-0 z-50 flex justify-between items-center px-8 h-20 border-b backdrop-blur-md transition-all duration-300",
-          isCollapsed ? "left-0 md:left-20" : "left-0 md:left-56",
-          isDark ? "border-white/10 bg-black/80" : "border-neutral-200 bg-white/80"
-        )}>
-          <div className="flex items-center gap-4">
-            <h2 className={cn("text-[10px] font-bold uppercase tracking-[0.3em] opacity-70", isDark ? "text-white" : "text-black")}>Dashboard</h2>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <button 
-              onClick={() => setIsDark(!isDark)}
-              className={cn(
-                "p-2 rounded-xl transition-all duration-300",
-                isDark ? "bg-white/5 text-white hover:bg-white/10" : "bg-neutral-100 text-black hover:bg-neutral-200"
-              )}
-            >
-              {isDark ? <Sun size={20} /> : <Moon size={20} />}
-            </button>
-            
-            <motion.button 
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={openTradeModal}
-              className={cn(
-                "px-6 py-2.5 rounded-xl font-bold uppercase tracking-widest text-[10px] transition-all",
-                isDark ? "bg-accent-green text-black hover:shadow-[0_0_20px_rgba(0,255,65,0.3)]" : "bg-black text-white hover:bg-neutral-800 shadow-lg"
-              )}
-            >
-              New Trade
-            </motion.button>
-          </div>
-        </header>
-
-        {/* Dashboard Content */}
-        <div className="pt-24 px-4 md:px-8 pb-24 space-y-6 w-full">
-          {/* Top Buttons */}
-          <div className="flex justify-end gap-3">
-            <div className={cn("px-4 py-2.5 border rounded-xl flex items-center gap-3", isDark ? "bg-[#0A0A0A] border-white/10" : "bg-neutral-100 border-neutral-200")}>
-              <div className="w-2 h-2 rounded-full bg-accent-green" />
-              <span className={cn("text-[10px] font-bold uppercase tracking-widest opacity-60", isDark ? "text-white" : "text-black")}>Live Market</span>
-            </div>
-            <div className={cn("px-4 py-2.5 border rounded-xl flex items-center", isDark ? "bg-[#0A0A0A] border-white/10" : "bg-neutral-100 border-neutral-200")}>
-              <span className={cn("text-[10px] font-bold uppercase tracking-widest opacity-60", isDark ? "text-white" : "text-black")}>Oct 24, 2024</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-            {/* Left Column: Profit Card */}
-            <div className="md:col-span-8">
-              <ProfitCard isDark={isDark} />
-            </div>
-
-            {/* Right Column: Win Rate + Session Status */}
-            <div className="md:col-span-4 flex flex-col gap-6">
-              <WinRateCard isDark={isDark} />
-              <SessionStatusCard isDark={isDark} />
-            </div>
-
-            {/* Bottom: Recent Activity Table */}
-            <div className="md:col-span-12">
-              <RecentActivityCard isDark={isDark} />
-            </div>
-          </div>
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+        {/* Left Column: Profit Card */}
+        <div className="md:col-span-8">
+          <ProfitCard isDark={isDark} totalPnL={totalPnL} loading={loading} />
         </div>
 
-        {/* Footer */}
-        <footer className={cn("font-body text-xs uppercase tracking-widest w-full py-12 border-t mt-auto transition-colors duration-300", isDark ? "bg-black border-white/10" : "bg-neutral-50 border-neutral-200")}>
-          <div className="max-w-7xl mx-auto px-8 flex flex-col md:flex-row justify-between items-center gap-8">
-            <div className="flex flex-col items-center md:items-start gap-2">
-              <span className={cn("font-black text-lg tracking-tighter", isDark ? "text-white" : "text-black")}>LOGOIPSUM</span>
-              <p className={cn("text-[10px]", isDark ? "text-white/40" : "text-neutral-500")}>© 2024 LOGOIPSUM. Editorial Precision for the Modern Trader.</p>
-            </div>
-            <div className="flex gap-8">
-              <FooterLink label="Privacy" isDark={isDark} />
-              <FooterLink label="Terms" isDark={isDark} />
-              <FooterLink label="Support" isDark={isDark} />
-            </div>
+        {/* Right Column: Win Rate + Session Status */}
+        <div className="md:col-span-4 flex flex-col gap-4">
+          <WinRateCard isDark={isDark} winRate={winRateFormatted} totalTrades={trades.length} avgRR={avgRRFormatted} loading={loading} />
+          <SessionStatusCard isDark={isDark} />
+        </div>
+
+        {/* Bottom: Recent Activity Table */}
+        <div className="md:col-span-12">
+          <RecentActivityCard 
+            isDark={isDark} 
+            trades={lastWeekTrades.slice(0, 5)} 
+            loading={loading} 
+            onNavigate={onNavigate} 
+            onEdit={handleEditTrade}
+            onDelete={handleDeleteTrade}
+            accountSize={accountSize}
+          />
+        </div>
+      </div>
+
+      {/* Footer */}
+      <footer className={cn("font-body text-xs uppercase tracking-widest w-full py-12 border-t mt-auto transition-colors duration-300", isDark ? "bg-black border-white/10" : "bg-neutral-50 border-neutral-200")}>
+        <div className="max-w-7xl mx-auto px-8 flex flex-col md:flex-row justify-between items-center gap-8">
+          <div className="flex flex-col items-center md:items-start gap-2">
+            <span className={cn("font-black text-lg tracking-tighter", isDark ? "text-white" : "text-black")}>Sovereign Analyst</span>
+            <p className={cn("text-[10px]", isDark ? "text-white/40" : "text-neutral-500")}>© 2024 Sovereign Analyst. Editorial Precision for the Modern Trader.</p>
           </div>
-        </footer>
-      </main>
+          <div className="flex gap-8">
+            <FooterLink label="Privacy" isDark={isDark} />
+            <FooterLink label="Terms" isDark={isDark} />
+            <FooterLink label="Support" isDark={isDark} />
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
 
-function ProfitCard({ isDark }: { isDark: boolean }) {
+function ProfitCard({ isDark, totalPnL, loading }: { isDark: boolean, totalPnL: number, loading: boolean }) {
   const [hoverPos, setHoverPos] = useState<{ x: number, y: number } | null>(null);
   const chartAreaRef = useRef<HTMLDivElement>(null);
 
@@ -242,10 +219,12 @@ function ProfitCard({ isDark }: { isDark: boolean }) {
     >
       <div className="flex justify-between items-start relative z-10">
         <div>
-          <span className={cn("text-[10px] font-bold uppercase tracking-[0.2em] opacity-40", isDark ? "text-white" : "text-black")}>Total Net Profit</span>
-          <div className="flex items-baseline gap-3 mt-2">
-            <h2 className={cn("text-5xl font-black tracking-tighter", isDark ? "text-white" : "text-black")}>$142,890.42</h2>
-            <span className={cn("font-bold text-sm", isDark ? "text-accent-green" : "text-green-600")}>+12.4%</span>
+          <span className={cn("text-[9px] font-bold uppercase tracking-[0.2em] opacity-40", isDark ? "text-white" : "text-black")}>Total Net Profit</span>
+          <div className="flex items-baseline gap-2 mt-1">
+            <h2 className={cn("text-4xl font-black tracking-tighter", isDark ? "text-white" : "text-black")}>
+              {loading ? "---" : `$${totalPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+            </h2>
+            <span className={cn("font-bold text-[13px]", "text-accent-green")}>+12.4%</span>
           </div>
         </div>
         <div className="flex gap-1">
@@ -255,7 +234,7 @@ function ProfitCard({ isDark }: { isDark: boolean }) {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               className={cn(
-                "px-3 py-1 rounded-full text-[10px] font-bold transition-all",
+                "px-2.5 py-1 rounded-lg text-[9px] font-bold transition-all",
                 tf === 'ALL' 
                   ? "bg-accent-green text-black" 
                   : (isDark ? "bg-white/5 text-white/40 hover:text-white" : "bg-neutral-100 text-black/40 hover:text-black")
@@ -329,41 +308,44 @@ function ProfitCard({ isDark }: { isDark: boolean }) {
   );
 }
 
-function WinRateCard({ isDark }: { isDark: boolean }) {
+function WinRateCard({ isDark, winRate, totalTrades, avgRR, loading }: { isDark: boolean, winRate: string, totalTrades: number, avgRR: string, loading: boolean }) {
+  const winRateNum = parseFloat(winRate);
   return (
     <motion.div 
       whileHover={{ y: -4 }}
       transition={{ duration: 0.3, ease: "easeOut" }}
       className={cn(
-        "p-6 standard-card flex flex-col items-center text-center gap-4 h-[353px] border transition-all duration-300", 
+        "p-6 standard-card flex flex-col items-center text-center gap-4 h-[384px] border transition-all duration-300", 
         isDark ? "bg-[#0A0A0A] border-white/10" : "bg-white border-neutral-200 shadow-sm"
       )}
     >
-      <span className={cn("text-[10px] font-bold uppercase tracking-[0.2em] opacity-40", isDark ? "text-white" : "text-black")}>Win rate</span>
-      <div className="relative w-36 h-36 flex items-center justify-center shrink-0">
+      <span className={cn("text-[10px] font-bold uppercase tracking-[0.3em] opacity-40", isDark ? "text-white" : "text-black")}>Win rate</span>
+      <div className="relative w-40 h-40 flex items-center justify-center shrink-0">
         <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-          <circle className={cn("fill-transparent stroke-[8]", isDark ? "stroke-white/5" : "stroke-neutral-100")} cx="50" cy="50" r="42"></circle>
+          <circle className={cn("fill-transparent stroke-[6]", isDark ? "stroke-white/5" : "stroke-neutral-100")} cx="50" cy="50" r="44"></circle>
           <circle 
-            className={cn("fill-transparent stroke-[8] transition-all duration-1000", isDark ? "stroke-accent-green" : "stroke-black")} 
-            cx="50" cy="50" r="42" 
-            strokeDasharray="263.9" 
-            strokeDashoffset={263.9 * (1 - 0.68)}
+            className={cn("fill-transparent stroke-[6] transition-all duration-1000", isDark ? "stroke-accent-green" : "stroke-black")} 
+            cx="50" cy="50" r="44" 
+            strokeDasharray="276.46" 
+            strokeDashoffset={276.46 * (1 - (loading ? 0 : winRateNum / 100))}
             strokeLinecap="round"
           ></circle>
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className={cn("text-2xl font-black tracking-tighter", isDark ? "text-white" : "text-black")}>68%</span>
-          <span className={cn("text-[7px] uppercase font-bold tracking-[0.2em] text-accent-green")}>Optimized</span>
+          <span className={cn("text-3xl font-black tracking-tighter", isDark ? "text-white" : "text-black")}>
+            {loading ? "---" : `${winRate}%`}
+          </span>
+          <span className={cn("text-[8px] uppercase font-bold tracking-[0.3em] text-accent-green mt-1")}>Optimized</span>
         </div>
       </div>
-      <div className={cn("grid grid-cols-2 w-full gap-4 pt-4 border-t mt-auto", isDark ? "border-white/10" : "border-neutral-100")}>
+      <div className={cn("grid grid-cols-2 w-full gap-3 pt-3 border-t mt-auto", isDark ? "border-white/10" : "border-neutral-100")}>
         <div className="min-w-0">
-          <p className={cn("text-[8px] uppercase tracking-[0.2em] mb-1 font-bold opacity-40 truncate", isDark ? "text-white" : "text-black")}>Total Trades</p>
-          <p className={cn("text-base font-bold truncate", isDark ? "text-white" : "text-black")}>1,204</p>
+          <p className={cn("text-[7px] uppercase tracking-[0.2em] mb-0.5 font-bold opacity-40 truncate", isDark ? "text-white" : "text-black")}>Total Trades</p>
+          <p className={cn("text-[13px] font-bold truncate", isDark ? "text-white" : "text-black")}>{loading ? "---" : totalTrades}</p>
         </div>
         <div className="min-w-0">
-          <p className={cn("text-[8px] uppercase tracking-[0.2em] mb-1 font-bold opacity-40 truncate", isDark ? "text-white" : "text-black")}>Profit Factor</p>
-          <p className={cn("text-base font-bold truncate", isDark ? "text-white" : "text-black")}>2.41</p>
+          <p className={cn("text-[7px] uppercase tracking-[0.2em] mb-0.5 font-bold opacity-40 truncate", isDark ? "text-white" : "text-black")}>Avg R:R</p>
+          <p className={cn("text-[13px] font-bold truncate", isDark ? "text-white" : "text-black")}>{loading ? "---" : `${avgRR} R`}</p>
         </div>
       </div>
     </motion.div>
@@ -376,12 +358,12 @@ function SessionStatusCard({ isDark }: { isDark: boolean }) {
       whileHover={{ y: -4 }}
       transition={{ duration: 0.3, ease: "easeOut" }}
       className={cn(
-        "p-5 standard-card flex flex-col gap-3 h-[153px] border transition-all duration-300 overflow-hidden", 
+        "p-4 standard-card flex flex-col gap-2 h-[130px] border transition-all duration-300 overflow-hidden", 
         isDark ? "bg-[#0A0A0A] border-white/10" : "bg-white border-neutral-200 shadow-sm"
       )}
     >
-      <span className={cn("text-[10px] font-bold uppercase tracking-[0.2em] opacity-40", isDark ? "text-white" : "text-black")}>Session Status</span>
-      <div className="space-y-1.5">
+      <span className={cn("text-[9px] font-bold uppercase tracking-[0.2em] opacity-40", isDark ? "text-white" : "text-black")}>Session Status</span>
+      <div className="space-y-1">
         <SessionItem label="London" status="CLOSED" isDark={isDark} />
         <SessionItem label="New York" status="ACTIVE" isActive isDark={isDark} />
         <SessionItem label="Tokyo" status="OPENING" isDark={isDark} />
@@ -404,7 +386,7 @@ function SessionItem({ label, status, isActive = false, isDark }: { label: strin
   );
 }
 
-function RecentActivityCard({ isDark }: { isDark: boolean }) {
+function RecentActivityCard({ isDark, trades, loading, onNavigate, onEdit, onDelete, accountSize }: { isDark: boolean, trades: Trade[], loading: boolean, onNavigate: (view: any) => void, onEdit: (trade: Trade) => void, onDelete: (id: string) => void, accountSize: string }) {
   return (
     <motion.div 
       whileHover={{ y: -4 }}
@@ -413,11 +395,12 @@ function RecentActivityCard({ isDark }: { isDark: boolean }) {
         isDark ? "bg-[#0A0A0A] border-white/10" : "bg-white border-neutral-200 shadow-sm"
       )}
     >
-      <div className={cn("p-8 border-b flex justify-between items-center", isDark ? "border-white/10" : "border-neutral-100")}>
-        <h3 className={cn("text-xl font-black tracking-tight", isDark ? "text-white" : "text-black")}>RECENT ACTIVITY</h3>
+      <div className={cn("px-6 py-4 border-b flex justify-between items-center", isDark ? "border-white/10" : "border-neutral-100")}>
+        <h3 className={cn("text-lg font-black tracking-tight", isDark ? "text-white" : "text-black")}>RECENT ACTIVITY</h3>
         <motion.button 
+          onClick={() => onNavigate("trades")}
           whileHover={{ x: 5 }}
-          className={cn("text-[10px] font-bold uppercase tracking-[0.2em] text-accent-green hover:opacity-70 transition-opacity")}
+          className={cn("text-[9px] font-bold uppercase tracking-[0.2em] text-accent-green hover:opacity-70 transition-opacity")}
         >
           View Ledger
         </motion.button>
@@ -426,17 +409,45 @@ function RecentActivityCard({ isDark }: { isDark: boolean }) {
         <table className="w-full text-left border-collapse">
           <thead className={cn("border-b", isDark ? "bg-white/[0.02] border-white/5" : "bg-neutral-50 border-neutral-100")}>
             <tr>
-              <TableHead label="Asset" isDark={isDark} />
-              <TableHead label="Type" isDark={isDark} />
-              <TableHead label="Entry" isDark={isDark} />
-              <TableHead label="Result" isDark={isDark} />
+              <TableHead label="Instrument" isDark={isDark} />
+              <TableHead label="Date & Time" isDark={isDark} />
+              <TableHead label="Dur." isDark={isDark} />
+              <TableHead label="Direction" isDark={isDark} />
+              <TableHead label="Setup" isDark={isDark} />
+              <TableHead label="TF" isDark={isDark} />
+              <TableHead label="R:R" isDark={isDark} />
+              <TableHead label="Session" isDark={isDark} />
+              <TableHead label="Tags" isDark={isDark} />
+              <TableHead label="Rules" isDark={isDark} />
               <TableHead label="PnL" isDark={isDark} />
+              <TableHead label="" isDark={isDark} />
             </tr>
           </thead>
           <tbody className={cn("divide-y", isDark ? "divide-white/5" : "divide-neutral-100")}>
-            <TableRow asset="BTC" name="Bitcoin" type="Long" entry="$62,100" result="Win" pnl="+$1,450.00" isDark={isDark} />
-            <TableRow asset="ETH" name="Ethereum" type="Short" entry="$2,510" result="Loss" pnl="-$420.00" isDark={isDark} />
-            <TableRow asset="SOL" name="Solana" type="Long" entry="$138.40" result="Win" pnl="+$890.12" isDark={isDark} />
+            {loading ? (
+              <tr>
+                <td colSpan={12} className="py-8 text-center">
+                  <Loader2 className="animate-spin mx-auto text-accent-green" size={20} />
+                </td>
+              </tr>
+            ) : trades.length === 0 ? (
+              <tr>
+                <td colSpan={12} className="py-8 text-center opacity-40 text-[11px] uppercase tracking-widest font-bold">
+                  No recent activity
+                </td>
+              </tr>
+            ) : (
+              trades.map((trade) => (
+                <TableRow 
+                  key={trade.id}
+                  trade={trade}
+                  isDark={isDark} 
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                  accountSize={accountSize}
+                />
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -444,67 +455,163 @@ function RecentActivityCard({ isDark }: { isDark: boolean }) {
   );
 }
 
-function NavItem({ icon, label, active = false, onClick, isDark, isCollapsed }: { icon: ReactNode, label: string, active?: boolean, onClick?: () => void, isDark: boolean, isCollapsed?: boolean }) {
-  return (
-    <motion.button 
-      onClick={onClick}
-      whileHover={{ x: 4 }}
-      whileTap={{ scale: 0.98 }}
-      className={cn(
-        "w-full flex items-center transition-all duration-300 group rounded-xl overflow-hidden whitespace-nowrap",
-        isCollapsed ? "justify-center px-0 py-3" : "gap-3 px-4 py-3",
-        active 
-          ? (isDark ? "bg-white/10 text-accent-green" : "bg-neutral-100 text-black font-bold shadow-sm")
-          : (isDark ? "text-neutral-400 hover:text-white hover:bg-white/5" : "text-neutral-500 hover:text-black hover:bg-neutral-100")
-      )}
-    >
-      <span className={cn(
-        "transition-colors duration-300 shrink-0",
-        active ? "text-accent-green" : "group-hover:text-accent-green"
-      )}>
-        {icon}
-      </span>
-      {!isCollapsed && <span className="text-sm font-medium tracking-tight">{label}</span>}
-    </motion.button>
-  );
-}
 
-function TableHead({ label, isDark }: { label: string, isDark: boolean }) {
+function TableHead({ label, isDark, tooltip }: { label: string, isDark: boolean, tooltip?: string }) {
   return (
-    <th className={cn("px-8 py-4 text-[10px] font-bold uppercase tracking-widest", isDark ? "text-white/40" : "text-neutral-500")}>
+    <th className={cn("px-6 py-3 text-[9px] font-bold uppercase tracking-widest", isDark ? "text-white/40" : "text-neutral-500")}>
       {label}
     </th>
   );
 }
 
-function TableRow({ asset, name, type, entry, result, pnl, isDark }: { asset: string, name: string, type: string, entry: string, result: string, pnl: string, isDark: boolean }) {
-  const isWin = result === "Win";
+const formatDuration = (minutes: number | null) => {
+  if (minutes === null) return "---";
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+};
+
+const RewardBar = ({ pnlAmount, accountSize, isWin, isDark }: { pnlAmount: number, accountSize: string, isWin: boolean, isDark: boolean }) => {
+  // Fulfillment Criteria: 0.5% -> 25%, 1% -> 50%, 1.5% -> 75%, 2% -> 100%
+  const size = parseFloat(accountSize.replace(/,/g, '')) || 100000;
+  const percentage = (Math.abs(pnlAmount) / size) * 100;
+  const width = Math.min(percentage * 50, 100); 
+  
   return (
-    <tr className={cn("transition-colors cursor-pointer group", isDark ? "hover:bg-white/[0.03]" : "hover:bg-neutral-50")}>
-      <td className="px-8 py-4">
-        <div className="flex items-center gap-3">
-          <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center", isDark ? "bg-white/5" : "bg-neutral-100")}>
-            <span className={cn("text-[10px] font-black", isDark ? "text-accent-green" : "text-black")}>{asset}</span>
-          </div>
-          <span className="font-bold text-xs tracking-tight">{name}</span>
+    <div className={cn("h-1 w-16 rounded-full overflow-hidden mt-1.5", isDark ? "bg-white/5" : "bg-neutral-100")}>
+      <motion.div 
+        initial={{ width: 0 }}
+        animate={{ width: `${width}%` }}
+        className={cn(
+          "h-full rounded-full transition-all duration-500", 
+          isWin 
+            ? "bg-accent-green shadow-[0_0_8px_rgba(0,255,65,0.6)]" 
+            : "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]"
+        )}
+      />
+    </div>
+  );
+};
+
+function TableRow({ trade, isDark, onEdit, onDelete, accountSize }: { trade: Trade, isDark: boolean, onEdit: (trade: Trade) => void, onDelete: (id: string) => void, accountSize: string, key?: any }) {
+  const [showMenu, setShowMenu] = useState(false);
+  const isWin = trade.pnl_amount >= 0;
+
+  const calculateDuration = (entry: string, exit: string) => {
+    if (!entry || !exit) return null;
+    const [entryH, entryM] = entry.split(':').map(Number);
+    const [exitH, exitM] = exit.split(':').map(Number);
+    let diffMinutes = (exitH * 60 + exitM) - (entryH * 60 + entryM);
+    if (diffMinutes < 0) diffMinutes += 24 * 60;
+    return diffMinutes;
+  };
+
+  const duration = trade.duration || calculateDuration(trade.entry_time, trade.exit_time);
+  
+  return (
+    <tr 
+      onClick={() => onEdit(trade)}
+      className={cn("transition-colors cursor-pointer group", isDark ? "hover:bg-white/[0.03]" : "hover:bg-neutral-50")}
+    >
+      <td className="px-6 py-2.5">
+        <span className="font-bold text-[12px] tracking-tight">{trade.instrument}</span>
+      </td>
+      <td className="px-6 py-2.5">
+        <p className={cn("text-[12px] font-bold", isDark ? "text-white" : "text-black")}>
+          {new Date(trade.trade_date).toLocaleDateString()}
+        </p>
+        <p className={cn("text-[9px] font-mono opacity-40", isDark ? "text-white" : "text-black")}>
+          {trade.entry_time.split(':').slice(0, 2).join(':')}
+        </p>
+      </td>
+      <td className="px-6 py-2.5 text-[9px] font-mono font-bold">
+        {formatDuration(duration)}
+      </td>
+      <td className={cn("px-6 py-2.5 text-[9px] font-bold uppercase tracking-widest", trade.direction === "LONG" ? "text-accent-green" : "text-accent-red")}>
+        {trade.direction}
+      </td>
+      <td className="px-6 py-2.5 text-[9px] font-bold opacity-60">
+        {trade.setup || "---"}
+      </td>
+      <td className="px-6 py-2.5 text-[9px] font-mono opacity-60">
+        {trade.timeframe || "---"}
+      </td>
+      <td className="px-6 py-2.5 text-[9px] font-bold opacity-60">
+        {Number(trade.r_multiple).toFixed(2)} R
+      </td>
+      <td className="px-6 py-2.5 text-[9px] font-bold opacity-60">
+        {trade.session}
+      </td>
+      <td className="px-6 py-2.5">
+        <div className="flex gap-1 flex-wrap max-w-[150px]">
+          {trade.tags ? trade.tags.split(',').map((tag, i) => (
+            <span key={i} className={cn("px-1.5 py-0.5 rounded text-[7px] font-bold uppercase tracking-widest", isDark ? "bg-white/5 text-white/40" : "bg-neutral-100 text-neutral-500")}>
+              {tag.trim()}
+            </span>
+          )) : "---"}
         </div>
       </td>
-      <td className={cn("px-8 py-4 text-xs font-bold", type === "Long" ? (isDark ? "text-accent-green" : "text-green-600") : "text-red-500")}>
-        {type}
+      <td className="px-6 py-2.5">
+        {trade.rules_followed ? (
+          <CheckCircle2 className="text-accent-green" size={14} />
+        ) : (
+          <div className="w-3.5 h-3.5 rounded-full border border-red-500/50 flex items-center justify-center">
+            <div className="w-1.5 h-0.5 bg-red-500" />
+          </div>
+        )}
       </td>
-      <td className="px-8 py-4 text-xs font-mono opacity-40">{entry}</td>
-      <td className="px-8 py-4">
-        <span className={cn(
-          "px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest",
-          isWin 
-            ? (isDark ? "bg-green-500/10 text-accent-green" : "bg-green-500/10 text-green-600")
-            : "bg-red-500/10 text-red-500"
-        )}>
-          {result}
-        </span>
+      <td className={cn("px-6 py-2.5 font-black text-[13px] tracking-tight", isWin ? "text-accent-green" : "text-accent-red")}>
+        <div className="flex flex-col">
+          <span>{isWin ? '+' : ''}${trade.pnl_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          <RewardBar pnlAmount={trade.pnl_amount} accountSize={accountSize} isWin={isWin} isDark={isDark} />
+        </div>
       </td>
-      <td className={cn("px-8 py-4 font-black text-sm tracking-tight", isWin ? (isDark ? "text-accent-green" : "text-green-600") : "text-red-500")}>
-        {pnl}
+      <td className="px-6 py-2.5 relative" onClick={(e) => e.stopPropagation()}>
+        <button 
+          onClick={() => setShowMenu(!showMenu)}
+          className={cn("p-1.5 rounded-full transition-colors", isDark ? "hover:bg-white/10" : "hover:bg-neutral-100")}
+        >
+          <MoreVertical size={14} className={isDark ? "text-white/40" : "text-neutral-400"} />
+        </button>
+        
+        <AnimatePresence>
+          {showMenu && (
+            <>
+              <div className="fixed inset-0 z-[60]" onClick={() => setShowMenu(false)} />
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                className={cn(
+                  "absolute right-8 top-12 w-48 rounded-xl border shadow-xl z-[70] overflow-hidden",
+                  isDark ? "bg-[#0A0A0A] border-white/10" : "bg-white border-neutral-200"
+                )}
+              >
+                <button 
+                  onClick={() => {
+                    onEdit(trade);
+                    setShowMenu(false);
+                  }}
+                  className={cn("w-full flex items-center gap-3 px-4 py-3 text-[10px] font-bold uppercase tracking-widest transition-colors", isDark ? "hover:bg-white/5 text-white/60" : "hover:bg-neutral-50 text-neutral-600")}
+                >
+                  <Edit2 size={14} className="text-accent-green" />
+                  Edit Trade
+                </button>
+                <button 
+                  onClick={() => {
+                    onDelete(trade.id);
+                    setShowMenu(false);
+                  }}
+                  className={cn("w-full flex items-center gap-3 px-4 py-3 text-[10px] font-bold uppercase tracking-widest transition-colors border-t", isDark ? "hover:bg-white/5 text-red-500 border-white/5" : "hover:bg-neutral-50 text-red-500 border-neutral-100")}
+                >
+                  <Trash2 size={14} />
+                  Delete Trade
+                </button>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
       </td>
     </tr>
   );

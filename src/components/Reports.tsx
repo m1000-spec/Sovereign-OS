@@ -21,294 +21,268 @@ import {
   BookOpen,
   Tag,
   Sun,
-  Moon
+  Moon,
+  LogOut,
+  Download
 } from "lucide-react";
 import { motion } from "motion/react";
-import { cn } from "@/src/lib/utils";
+import { cn } from "../lib/utils";
+import { Header } from "./Header";
+import { Tooltip } from "./Tooltip";
+import { TagGroup } from "../types";
 
 interface ReportsProps {
-  onNavigate: (view: "dashboard" | "trades" | "analytics" | "reports" | "settings" | "daily-journal" | "landing" | "annotations") => void;
+  onNavigate: (view: "dashboard" | "trades" | "analytics" | "reports" | "settings" | "daily-journal" | "annotations") => void;
   isDark: boolean;
   setIsDark: (isDark: boolean) => void;
   openTradeModal: () => void;
+  onLogout: () => void;
+  instruments: { id: number, name: string, color: string }[];
+  setInstruments: (instruments: { id: number, name: string, color: string }[]) => void;
+  setups: string[];
+  setSetups: (setups: string[]) => void;
+  tagGroups: TagGroup[];
+  setTagGroups: (groups: TagGroup[]) => void;
+  accountSize: string;
+  setAccountSize: (size: string) => void;
+  isCollapsed: boolean;
+  setIsCollapsed: (collapsed: boolean) => void;
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
 }
 
-export default function Reports({ onNavigate, isDark, setIsDark, openTradeModal }: ReportsProps) {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+import { useTradeStore } from "../store/useTradeStore";
+import { AIInsightsPanel } from "./AIInsightsPanel";
+
+export default function Reports({ 
+  onNavigate, 
+  isDark, 
+  setIsDark, 
+  openTradeModal, 
+  onLogout, 
+  instruments, 
+  setInstruments, 
+  setups, 
+  setSetups, 
+  tagGroups, 
+  setTagGroups, 
+  accountSize, 
+  setAccountSize,
+  isCollapsed,
+  setIsCollapsed,
+  searchQuery,
+  setSearchQuery
+}: ReportsProps) {
+  const { trades, loading, profitByDayOfWeek, tradesByDayOfWeek, subscribeToTrades, pnlByTime } = useTradeStore();
   const [activeFilter, setActiveFilter] = useState("Time");
   const [timeInterval, setTimeInterval] = useState("1hr");
   const [hoveredBar, setHoveredBar] = useState<{ type: 'pl' | 'dist', index: number, value: string, time: string } | null>(null);
 
-  // Simulated data multiplier based on time interval
-  const getMultiplier = () => {
-    switch(timeInterval) {
-      case "1hr": return 1;
-      case "30m": return 0.7;
-      case "15M": return 0.4;
-      case "10m": return 0.3;
-      case "5m": return 0.15;
-      default: return 1;
-    }
-  };
+  useEffect(() => {
+    const unsubscribe = subscribeToTrades();
+    return () => unsubscribe();
+  }, [subscribeToTrades]);
 
-  const multiplier = getMultiplier();
+  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const pnlByTimeData = pnlByTime(timeInterval === "30m" ? "30m" : "1h");
+
+  const maxPnL = Math.max(...pnlByTimeData.map(d => Math.abs(d.pnl)), 100);
+  const maxTrades = Math.max(...pnlByTimeData.map(d => d.tradeCount), 1);
+
+  const dayPnL = days.map(day => profitByDayOfWeek[day] || 0);
+  const dayTrades = days.map(day => tradesByDayOfWeek[day] || 0);
+
+  const maxDayPnL = Math.max(...dayPnL.map(p => Math.abs(p)), 100);
+  const maxDayTrades = Math.max(...dayTrades, 1);
 
   const dayData = {
-    pl: [0, 55, 95, 75, 50, 35, 0], // Sun-Sat
-    dist: [0, 90, 72, 82, 74, 70, 0], // Sun-Sat
+    pl: dayPnL.map(p => (Math.abs(p) / maxDayPnL) * 100),
+    dist: dayTrades.map(t => (t / maxDayTrades) * 100),
+    maxPnL: maxDayPnL,
+    maxTrades: maxDayTrades,
     summary: [
-      { label: "Best Day", value: "Tuesday", subValue: "$35,043.78", color: "text-[#00FF41]" },
-      { label: "Worst Day", value: "Friday", subValue: "$13,001.04", color: "text-[#E01E37]" },
-      { label: "Most Trades", value: "Monday", subValue: "54 Trades", color: "text-[#00E5FF]" },
-      { label: "Least Trades", value: "Tuesday", subValue: "43 Trades", color: "text-[#00E5FF]" },
+      { label: "Peak Performance", value: days[dayPnL.indexOf(Math.max(...dayPnL))], subValue: `+$${Math.max(...dayPnL).toLocaleString()}`, color: "text-[#00FF41]" },
+      { label: "Drawdown Zone", value: days[dayPnL.indexOf(Math.min(...dayPnL))], subValue: `-$${Math.abs(Math.min(...dayPnL)).toLocaleString()}`, color: "text-[#E01E37]" },
+      { label: "High Volume", value: days[dayTrades.indexOf(Math.max(...dayTrades))], subValue: `${Math.max(...dayTrades)} TRADES`, color: "text-neutral-400" },
+      { label: "Low Volume", value: days[dayTrades.indexOf(Math.min(...dayTrades.filter(t => t > 0)) || 0)], subValue: `${Math.min(...dayTrades.filter(t => t > 0)) || 0} TRADES`, color: "text-neutral-400" },
     ],
-    overview: [
-      { day: "Monday", trades: 54, profit: "$20,031.81", winRate: "52%", wlb: "28W-26L" },
-      { day: "Tuesday", trades: 43, profit: "$35,043.78", winRate: "72%", wlb: "31W-12L" },
-      { day: "Wednesday", trades: 49, profit: "$26,721.35", winRate: "55%", wlb: "27W-22L" },
-      { day: "Thursday", trades: 44, profit: "$17,928.35", winRate: "55%", wlb: "24W-20L" },
-      { day: "Friday", trades: 40, profit: "$13,001.04", winRate: "50%", wlb: "20W-20L" },
-    ]
+    overview: days.map(day => {
+      const dTrades = trades.filter(t => new Date(t.trade_date).getDay() === days.indexOf(day));
+      const profit = profitByDayOfWeek[day] || 0;
+      const wins = dTrades.filter(t => t.pnl_amount > 0).length;
+      const winRate = dTrades.length > 0 ? (wins / dTrades.length * 100).toFixed(0) : "0";
+      return { day, trades: dTrades.length, profit: `$${profit.toLocaleString()}`, winRate: `${winRate}%`, wlb: `${wins}W-${dTrades.length - wins}L` };
+    }).filter(d => d.trades > 0)
   };
 
-  const monthData = {
-    pl: [45, 45, 60, 25, 100, 85, 82, 30, 2, 10, 22, 28], // Jan-Dec
-    dist: [85, 95, 65, 80, 75, 82, 72, 35, 45, 50, 40, 45], // Jan-Dec
-    summary: [
-      { label: "Best Month", value: "May", subValue: "$15,796.32", color: "text-[#00FF41]" },
-      { label: "Worst Month", value: "September", subValue: "$204.69", color: "text-[#E01E37]" },
-      { label: "Most Trades", value: "February", subValue: "31 Trades", color: "text-[#00E5FF]" },
-      { label: "Least Trades", value: "August", subValue: "12 Trades", color: "text-[#00E5FF]" },
-    ],
-    overview: [
-      { month: "January", trades: 29, profit: "$7,468.22", winRate: "48%", wlb: "14W-15L" },
-      { month: "February", trades: 31, profit: "$7,415.16", winRate: "48%", wlb: "15W-16L" },
-      { month: "March", trades: 24, profit: "$9,821.45", winRate: "58%", wlb: "14W-10L" },
-      { month: "April", trades: 28, profit: "$4,102.33", winRate: "42%", wlb: "12W-16L" },
-      { month: "May", trades: 26, profit: "$15,796.32", winRate: "73%", wlb: "19W-7L" },
-    ]
-  };
+  // Time insights
+  const timePnL = pnlByTimeData.map(d => d.pnl);
+  const timeTrades = pnlByTimeData.map(d => d.tradeCount);
+  const peakTimeIdx = timePnL.indexOf(Math.max(...timePnL));
+  const drawdownTimeIdx = timePnL.indexOf(Math.min(...timePnL));
+  const highVolTimeIdx = timeTrades.indexOf(Math.max(...timeTrades));
+  const lowVolTimeIdx = timeTrades.indexOf(Math.min(...timeTrades.filter(t => t > 0)) || 0);
 
-  const symbolData = {
-    pl: [85, 62, 45, 38, 55], 
-    dist: [95, 72, 58, 44, 68], 
-    summary: [
-      { label: "Best Symbol", value: "GBPUSD", subValue: "$83,154.66", color: "text-[#00FF41]" },
-      { label: "Worst Symbol", value: "EURUSD", subValue: "$12,450.21", color: "text-[#E01E37]" },
-      { label: "Most Trades", value: "GBPUSD", subValue: "244 Trades", color: "text-[#00E5FF]" },
-      { label: "Least Trades", value: "USDJPY", subValue: "42 Trades", color: "text-[#00E5FF]" },
-    ],
-    overview: [
-      { symbol: "GBPUSD", trades: 244, profit: "$83,154.66", winRate: "54%", wlb: "131W-113L" },
-      { symbol: "EURUSD", trades: 156, profit: "$42,154.66", winRate: "48%", wlb: "75W-81L" },
-      { symbol: "NAS100", trades: 98, profit: "$28,721.35", winRate: "52%", wlb: "51W-47L" },
-      { symbol: "XAUUSD", trades: 64, profit: "$15,928.35", winRate: "45%", wlb: "29W-35L" },
-      { symbol: "USDJPY", trades: 42, profit: "$12,001.04", winRate: "50%", wlb: "21W-21L" },
-    ]
-  };
-
-  const tagsData = {
-    pl: [65, 45, 85, 35], 
-    dist: [75, 85, 65, 95], 
-    summary: [
-      { label: "Best Tag", value: "Trend", subValue: "$42,154.66", color: "text-[#00FF41]" },
-      { label: "Worst Tag", value: "Counter", subValue: "$12,154.66", color: "text-[#E01E37]" },
-      { label: "Most Trades", value: "Trend", subValue: "156 Trades", color: "text-[#00E5FF]" },
-      { label: "Least Trades", value: "Range", subValue: "45 Trades", color: "text-[#00E5FF]" },
-    ],
-    overview: [
-      { tag: "Trend", trades: 156, profit: "$42,154.66", winRate: "62%", wlb: "97W-59L" },
-      { tag: "Counter", trades: 88, profit: "$12,154.66", winRate: "45%", wlb: "40W-48L" },
-      { tag: "Scalp", trades: 124, profit: "$28,154.66", winRate: "55%", wlb: "68W-56L" },
-      { tag: "Range", trades: 45, profit: "$8,154.66", winRate: "40%", wlb: "18W-27L" },
-    ]
-  };
-
-  const setupsData = {
-    pl: [95, 75, 55, 42], 
-    dist: [85, 65, 95, 58], 
-    summary: [
-      { label: "Best Setup", value: "Breakout", subValue: "$56,154.66", color: "text-[#00FF41]" },
-      { label: "Worst Setup", value: "Reversal", subValue: "$23,154.66", color: "text-[#E01E37]" },
-      { label: "Most Trades", value: "Breakout", subValue: "188 Trades", color: "text-[#00E5FF]" },
-      { label: "Least Trades", value: "Pullback", subValue: "76 Trades", color: "text-[#00E5FF]" },
-    ],
-    overview: [
-      { setup: "Breakout", trades: 188, profit: "$56,154.66", winRate: "58%", wlb: "109W-79L" },
-      { setup: "Pullback", trades: 76, profit: "$32,154.66", winRate: "52%", wlb: "40W-36L" },
-      { setup: "Reversal", trades: 94, profit: "$23,154.66", winRate: "48%", wlb: "45W-49L" },
-      { setup: "Trend", trades: 112, profit: "$41,154.66", winRate: "60%", wlb: "67W-45L" },
-    ]
-  };
-
-  const overviewData = [
-    { time: "07:00", trades: 27, profit: "$16275.60", winRate: "59%", wlb: "16W-11L" },
-    { time: "08:00", trades: 26, profit: "$21344.47", winRate: "73%", wlb: "19W-7L" },
-    { time: "09:00", trades: 23, profit: "$8689.15", winRate: "57%", wlb: "13W-10L" },
-    { time: "10:00", trades: 23, profit: "$14687.76", winRate: "52%", wlb: "12W-11L" },
-    { time: "11:00", trades: 35, profit: "$13288.04", winRate: "60%", wlb: "21W-14L" },
-    { time: "12:00", trades: 29, profit: "$3570.40", winRate: "45%", wlb: "13W-16L" },
-    { time: "13:00", trades: 22, profit: "$1102.77", winRate: "50%", wlb: "11W-11L" },
-    { time: "14:00", trades: 26, profit: "$16891.70", winRate: "62%", wlb: "16W-10L" },
-    { time: "15:00", trades: 19, profit: "$16496.42", winRate: "74%", wlb: "14W-5L" },
-    { time: "16:00", trades: 23, profit: "$10083.58", winRate: "48%", wlb: "11W-12L" },
+  const timeSummary = [
+    { label: "Peak Performance", value: pnlByTimeData[peakTimeIdx]?.label || "N/A", subValue: `+$${(pnlByTimeData[peakTimeIdx]?.pnl || 0).toLocaleString()}`, color: "text-[#00FF41]" },
+    { label: "Drawdown Zone", value: pnlByTimeData[drawdownTimeIdx]?.label || "N/A", subValue: `-$${Math.abs(pnlByTimeData[drawdownTimeIdx]?.pnl || 0).toLocaleString()}`, color: "text-[#E01E37]" },
+    { label: "High Volume", value: pnlByTimeData[highVolTimeIdx]?.label || "N/A", subValue: `${pnlByTimeData[highVolTimeIdx]?.tradeCount || 0} TRADES`, color: "text-neutral-400" },
+    { label: "Low Volume", value: pnlByTimeData[lowVolTimeIdx]?.label || "N/A", subValue: `${pnlByTimeData[lowVolTimeIdx]?.tradeCount || 0} TRADES`, color: "text-neutral-400" },
   ];
+
+  // Helper to process categories
+  const getCategoryData = (category: 'month' | 'symbol' | 'tag' | 'setup') => {
+    const stats: Record<string, { pnl: number, trades: number, wins: number }> = {};
+    
+    // Initialize stats for months to ensure all months are present
+    if (category === 'month') {
+      const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+      months.forEach(m => {
+        stats[m] = { pnl: 0, trades: 0, wins: 0 };
+      });
+    }
+
+    trades.forEach(t => {
+      let keys: string[] = [];
+      if (category === 'month') {
+        keys = [new Date(t.trade_date).toLocaleString('en-US', { month: 'long' })];
+      } else if (category === 'symbol') {
+        keys = [t.instrument];
+      } else if (category === 'setup') {
+        keys = [t.setup || 'No Setup'];
+      } else if (category === 'tag') {
+        keys = t.tags ? t.tags.split(',').map(tag => tag.trim()).filter(tag => tag !== "") : ['No Tags'];
+        if (keys.length === 0) keys = ['No Tags'];
+      }
+
+      keys.forEach(key => {
+        if (!stats[key]) stats[key] = { pnl: 0, trades: 0, wins: 0 };
+        stats[key].pnl += t.pnl_amount;
+        stats[key].trades += 1;
+        if (t.pnl_amount > 0) stats[key].wins += 1;
+      });
+    });
+
+    const sortedKeys = Object.keys(stats).sort((a, b) => {
+      if (category === 'month') {
+        const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        return months.indexOf(a) - months.indexOf(b);
+      }
+      return stats[b].pnl - stats[a].pnl;
+    });
+
+    const maxT = Math.max(...Object.values(stats).map(s => s.trades), 1);
+    const maxP = Math.max(...Object.values(stats).map(s => Math.abs(s.pnl)), 100);
+    
+    const best = sortedKeys.reduce((a, b) => stats[a].pnl > stats[b].pnl ? a : b, sortedKeys[0] || 'N/A');
+    const worst = sortedKeys.reduce((a, b) => stats[a].pnl < stats[b].pnl ? a : b, sortedKeys[0] || 'N/A');
+    const most = sortedKeys.reduce((a, b) => stats[a].trades > stats[b].trades ? a : b, sortedKeys[0] || 'N/A');
+    const least = sortedKeys.filter(k => stats[k].trades > 0).reduce((a, b) => stats[a].trades < stats[b].trades ? a : b, sortedKeys[0] || 'N/A');
+
+    return {
+      pl: sortedKeys.map(k => (Math.abs(stats[k].pnl) / maxP) * 100),
+      dist: sortedKeys.map(k => (stats[k].trades / maxT) * 100),
+      maxP,
+      maxT,
+      summary: [
+        { label: "Peak Performance", value: best, subValue: `+$${(stats[best]?.pnl || 0).toLocaleString()}`, color: "text-[#00FF41]" },
+        { label: "Drawdown Zone", value: worst, subValue: `$${(stats[worst]?.pnl || 0).toLocaleString()}`, color: "text-[#E01E37]" },
+        { label: "High Volume", value: most, subValue: `${stats[most]?.trades || 0} TRADES`, color: "text-neutral-400" },
+        { label: "Low Volume", value: least, subValue: `${stats[least]?.trades || 0} TRADES`, color: "text-neutral-400" },
+      ],
+      overview: sortedKeys.map(k => ({
+        [category]: k,
+        trades: stats[k].trades,
+        profit: `$${stats[k].pnl.toLocaleString()}`,
+        winRate: `${(stats[k].wins / stats[k].trades * 100).toFixed(0)}%`,
+        wlb: `${stats[k].wins}W-${stats[k].trades - stats[k].wins}L`
+      })) as any[]
+    };
+  };
+
+  const monthData = getCategoryData('month');
+  const symbolData = getCategoryData('symbol');
+  const tagsData = getCategoryData('tag');
+  const setupsData = getCategoryData('setup');
+
+  const overviewData = pnlByTimeData.map(d => ({
+    time: d.label,
+    trades: d.tradeCount,
+    profit: `$${d.pnl.toLocaleString()}`,
+    winRate: `${d.tradeCount > 0 ? (d.wins / d.tradeCount * 100).toFixed(0) : 0}%`,
+    wlb: `${d.wins}W-${d.tradeCount - d.wins}L`
+  })).filter(d => d.trades > 0);
 
   useEffect(() => {
     // Global theme management is handled in App.tsx
   }, []);
 
+  const handleDownloadPDF = () => {
+    window.print();
+  };
+
+  const currentDate = new Date().toLocaleDateString('en-US', {
+    month: 'short',
+    day: '2-digit',
+    year: 'numeric'
+  });
+
   return (
-    <div className={cn(
-      "flex min-h-screen font-body selection:bg-accent-green selection:text-black transition-colors duration-500",
-      isDark ? "bg-black text-white" : "bg-white text-black"
-    )}>
-      {/* Sidebar */}
-      <motion.aside 
-        initial={false}
-        animate={{ width: isCollapsed ? 80 : 224 }}
-        className={cn(
-          "hidden md:flex flex-col h-screen fixed left-0 border-r z-40 transition-colors duration-300 overflow-hidden",
-          isDark ? "bg-black border-white/10" : "bg-white border-neutral-200"
-        )}
-      >
-        <div className="p-6 flex flex-col h-full">
-          <div className="mb-8 px-2 overflow-hidden">
-            <h1 className={cn(
-              "font-black italic tracking-tighter transition-all duration-300 leading-none", 
-              isDark ? "text-white" : "text-black",
-              isCollapsed ? "text-lg" : "text-xl"
-            )}>
-              {isCollapsed ? "SA" : "Sovereign Analyst"}
-            </h1>
-            {!isCollapsed && (
-              <p className="text-[10px] mt-1 uppercase tracking-[0.2em] font-bold text-accent-green">
-                Premium Tier
-              </p>
-            )}
-          </div>
-
-          <nav className="flex-1 space-y-2">
-            <NavItem 
-              icon={<LayoutDashboard size={18} />} 
-              label="Dashboard" 
-              isCollapsed={isCollapsed}
-              onClick={() => onNavigate("dashboard")}
-              isDark={isDark} 
-            />
-            <NavItem 
-              icon={<FileText size={18} />} 
-              label="Daily Journal" 
-              isCollapsed={isCollapsed}
-              onClick={() => onNavigate("daily-journal")}
-              isDark={isDark} 
-            />
-            <NavItem 
-              icon={<ArrowLeftRight size={18} />} 
-              label="Trades" 
-              isCollapsed={isCollapsed}
-              onClick={() => onNavigate("trades")}
-              isDark={isDark} 
-            />
-            <NavItem 
-              icon={<BarChart3 size={18} />} 
-              label="Analytics" 
-              isCollapsed={isCollapsed}
-              onClick={() => onNavigate("analytics")}
-              isDark={isDark} 
-            />
-            <NavItem 
-              icon={<ClipboardList size={18} />} 
-              label="Reports" 
-              active 
-              isCollapsed={isCollapsed}
-              onClick={() => onNavigate("reports")}
-              isDark={isDark} 
-            />
-            <NavItem 
-              icon={<Tag size={18} />} 
-              label="Annotations" 
-              isCollapsed={isCollapsed}
-              onClick={() => onNavigate("annotations")}
-              isDark={isDark} 
-            />
-          </nav>
-
-          <div className="mt-auto space-y-2">
-            <button 
-              onClick={() => setIsCollapsed(!isCollapsed)}
-              className={cn(
-                "w-full flex items-center justify-center py-3 transition-all duration-200 group rounded-xl",
-                isDark ? "text-neutral-400 hover:text-white hover:bg-white/5" : "text-neutral-500 hover:text-black hover:bg-neutral-100"
-              )}
-              title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-            >
-              <ChevronLeft size={18} className={cn("transition-transform duration-300", isCollapsed && "rotate-180")} />
-            </button>
-
-            <NavItem 
-              icon={<Settings size={18} />} 
-              label="Settings" 
-              isCollapsed={isCollapsed}
-              isDark={isDark} 
-              onClick={() => onNavigate("settings")}
-            />
-          </div>
-        </div>
-      </motion.aside>
-
-      {/* Main Content */}
-      <main className={cn("flex-1 flex flex-col transition-all duration-300", isCollapsed ? "md:ml-20" : "md:ml-56", isDark ? "bg-black" : "bg-white")}>
-        <header className={cn(
-          "fixed top-0 right-0 z-50 flex justify-between items-center px-8 h-20 border-b backdrop-blur-md transition-all duration-300",
-          isCollapsed ? "left-0 md:left-20" : "left-0 md:left-56",
-          isDark ? "border-white/10 bg-black/80" : "border-neutral-200 bg-white/80"
-        )}>
-          <div className="flex items-center gap-4">
-            <h2 className={cn("text-[10px] font-bold uppercase tracking-[0.3em] opacity-70", isDark ? "text-white" : "text-black")}>Reports</h2>
-          </div>
-          <div className="flex items-center gap-4">
-            <button 
-              onClick={() => setIsDark(!isDark)}
-              className={cn(
-                "p-2 rounded-xl transition-all",
-                isDark ? "bg-white/5 text-white hover:bg-white/10" : "bg-neutral-100 text-black hover:bg-neutral-200"
-              )}
-            >
-              {isDark ? <Sun size={20} /> : <Moon size={20} />}
-            </button>
-            
-            <motion.button 
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={openTradeModal}
-              className={cn(
-                "px-6 py-2.5 rounded-xl font-bold uppercase tracking-widest text-[10px] transition-all",
-                isDark ? "bg-accent-green text-black hover:shadow-[0_0_20px_rgba(0,255,65,0.3)]" : "bg-black text-white hover:bg-neutral-800 shadow-lg"
-              )}
-            >
-              New Trade
-            </motion.button>
-          </div>
-        </header>
-
-        <div className="w-full space-y-8 pt-24 px-4 md:px-8 pb-24">
+    <div className="flex-1 flex flex-col transition-all duration-300">
+      <style dangerouslySetInnerHTML={{ __html: `
+        @media print {
+          body { background: white !important; color: black !important; }
+          .no-print { display: none !important; }
+          .print-only { display: block !important; }
+          .md\\:ml-\\[180px\\], .md\\:ml-\\[60px\\] { margin-left: 0 !important; }
+          header, nav, .sidebar, .bottom-nav, .ai-insights-trigger { display: none !important; }
+          .standard-card { border: 1px solid #eee !important; box-shadow: none !important; break-inside: avoid; }
+          .grid { display: block !important; }
+          .grid > div { margin-bottom: 20px !important; width: 100% !important; }
+          canvas { max-width: 100% !important; height: auto !important; }
+          .pt-20 { padding-top: 0 !important; }
+          .pb-32 { padding-bottom: 0 !important; }
+        }
+      `}} />
+      <div className="w-full space-y-6 pt-20 px-4 md:px-6 pb-32 md:pb-16">
           {/* Title Section */}
-          <div className="flex flex-col md:flex-row justify-end items-end gap-10 mb-8">
-            <div className="flex gap-3">
-              <div className={cn("px-6 py-3 border rounded-xl flex items-center gap-3 backdrop-blur-sm", isDark ? "bg-white/5 border-white/10" : "bg-neutral-100 border-neutral-200")}>
-                <div className={cn("w-2 h-2 rounded-full animate-pulse", isDark ? "bg-accent-green" : "bg-green-500")}></div>
-                <span className={cn("text-[10px] font-bold uppercase tracking-widest opacity-60", isDark ? "text-white" : "text-black")}>Live Market</span>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 mb-6">
+            <div className="w-full sm:w-auto">
+              <AIInsightsPanel 
+                id="reports"
+                isDark={isDark}
+                data={{
+                  profitByDay: profitByDayOfWeek,
+                  tradesByDay: tradesByDayOfWeek,
+                  summary: dayData.summary
+                }}
+                prompt="Summarize my trading performance. Tell me what worked, what didnt, and what I should prioritize next week. Be concise."
+              />
+            </div>
+            <div className="flex gap-2 w-full sm:w-auto justify-end no-print">
+              <button
+                onClick={handleDownloadPDF}
+                className={cn(
+                  "px-4 py-2 border rounded-lg flex items-center gap-2 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]",
+                  isDark ? "bg-white/5 border-white/10 hover:bg-white/10 text-white" : "bg-white border-neutral-200 hover:bg-neutral-50 text-black shadow-sm"
+                )}
+              >
+                <Download size={14} />
+                <span className="text-[9px] font-bold uppercase tracking-widest">Download PDF</span>
+              </button>
+              <div className={cn("px-4 py-2 border rounded-lg flex items-center gap-2 backdrop-blur-sm", isDark ? "bg-white/5 border-white/10" : "bg-neutral-100 border-neutral-200")}>
+                <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse", isDark ? "bg-accent-green" : "bg-green-500")}></div>
+                <span className={cn("text-[9px] font-bold uppercase tracking-widest opacity-60", isDark ? "text-white" : "text-black")}>Live Market</span>
               </div>
-              <div className={cn("px-6 py-3 border rounded-xl backdrop-blur-sm", isDark ? "bg-white/5 border-white/10" : "bg-neutral-100 border-neutral-200")}>
-                <span className={cn("text-[10px] font-bold uppercase tracking-widest opacity-60", isDark ? "text-white" : "text-black")}>Oct 24, 2024</span>
+              <div className={cn("px-4 py-2 border rounded-lg backdrop-blur-sm", isDark ? "bg-white/5 border-white/10" : "bg-neutral-100 border-neutral-200")}>
+                <span className={cn("text-[9px] font-bold uppercase tracking-widest opacity-60", isDark ? "text-white" : "text-black")}>{currentDate}</span>
               </div>
             </div>
           </div>
 
           {/* Filters */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 mb-8">
-            <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+            <div className="flex flex-wrap items-center gap-2">
               {["Time", "Day", "Month", "Symbol", "Tags", "Setups"].map((filter) => (
                 <motion.button 
                   key={filter}
@@ -316,7 +290,7 @@ export default function Reports({ onNavigate, isDark, setIsDark, openTradeModal 
                   whileTap={{ scale: 0.98 }}
                   onClick={() => setActiveFilter(filter)}
                   className={cn(
-                    "px-6 py-2.5 text-[10px] font-bold rounded-xl uppercase tracking-widest transition-all border",
+                    "px-4 py-2 text-[9px] font-bold rounded-lg uppercase tracking-widest transition-all border",
                     activeFilter === filter 
                       ? (isDark ? "bg-white text-black border-white shadow-[0_0_20px_rgba(255,255,255,0.2)]" : "bg-black text-white border-black shadow-[0_10px_20px_rgba(0,0,0,0.1)]")
                       : (isDark ? "bg-[#111111] text-[#888888] border-[#222222] hover:text-white hover:border-[#444444]" : "bg-white text-neutral-500 border-neutral-200 hover:text-black hover:border-neutral-300 hover:shadow-sm")
@@ -331,7 +305,7 @@ export default function Reports({ onNavigate, isDark, setIsDark, openTradeModal 
                 value={timeInterval}
                 onChange={(e) => setTimeInterval(e.target.value)}
                 className={cn(
-                  "appearance-none border py-3 pl-6 pr-14 rounded-xl text-[10px] font-bold uppercase tracking-widest focus:outline-none focus:ring-1 focus:ring-accent-green cursor-pointer transition-all",
+                  "appearance-none border py-2 pl-4 pr-10 rounded-lg text-[9px] font-bold uppercase tracking-widest focus:outline-none focus:ring-1 focus:ring-accent-green cursor-pointer transition-all",
                   isDark ? "bg-[#111111] border-[#222222] text-white hover:border-[#444444]" : "bg-white border-neutral-200 text-black hover:border-neutral-300 hover:shadow-sm"
                 )}
               >
@@ -341,45 +315,45 @@ export default function Reports({ onNavigate, isDark, setIsDark, openTradeModal 
                 <option value="10m">10m</option>
                 <option value="5m">5m</option>
               </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-5 text-[#888888]">
-                <ChevronDown size={18} />
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-[#888888]">
+                <ChevronDown size={14} />
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-10">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             {activeFilter === "Time" ? (
               <>
                 {/* P&L By Time */}
                 <div className={cn(
-                  "rounded-2xl border p-8 flex flex-col min-h-[520px] group transition-all duration-500",
+                  "rounded-xl border p-5 flex flex-col min-h-[420px] group transition-all duration-500",
                   isDark ? "bg-[#0a0a0a] border-white/5 hover:border-white/10" : "bg-white border-neutral-200 hover:border-neutral-300 shadow-sm"
                 )}>
-                  <div className="flex justify-between items-start mb-12">
-                    <div className="space-y-2">
-                      <h2 className="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-500 font-mono">Performance Matrix</h2>
-                      <p className={cn("text-xl font-serif italic leading-none", isDark ? "text-white" : "text-black")}>P&L By Time Interval</p>
+                  <div className="flex justify-between items-start mb-8">
+                    <div className="space-y-1">
+                      <h2 className="text-[8px] font-bold uppercase tracking-[0.3em] text-neutral-500 font-mono">Performance Matrix</h2>
+                      <p className={cn("text-base font-serif italic leading-none", isDark ? "text-white" : "text-black")}>P&L By Time Interval</p>
                     </div>
-                    <div className={cn("flex rounded-xl p-1 border shadow-inner", isDark ? "bg-black border-white/5" : "bg-neutral-100 border-neutral-200")}>
-                      <button className="px-4 py-1.5 text-[9px] font-bold uppercase tracking-widest text-neutral-500 rounded-lg hover:text-white transition-colors">Separate</button>
-                      <button className="px-4 py-1.5 text-[9px] font-bold uppercase tracking-widest bg-[#00FF41] text-black rounded-lg shadow-lg font-black">Total</button>
+                    <div className={cn("flex rounded-lg p-0.5 border shadow-inner", isDark ? "bg-black border-white/5" : "bg-neutral-100 border-neutral-200")}>
+                      <button className="px-3 py-1 text-[8px] font-bold uppercase tracking-widest text-neutral-500 rounded-md hover:text-white transition-colors">Separate</button>
+                      <button className="px-3 py-1 text-[8px] font-bold uppercase tracking-widest bg-[#00FF41] text-black rounded-md shadow-lg font-black">Total</button>
                     </div>
                   </div>
                   <div className="relative flex-grow flex">
-                    <div className="flex flex-col justify-between text-[10px] font-mono font-bold text-neutral-600 pr-8 w-24 text-right z-10 py-2">
-                      <span>${(22.0 * multiplier).toFixed(1)}k</span>
-                      <span>${(16.5 * multiplier).toFixed(1)}k</span>
-                      <span>${(11.0 * multiplier).toFixed(1)}k</span>
-                      <span>${(5.5 * multiplier).toFixed(1)}k</span>
+                    <div className="flex flex-col justify-between text-[9px] font-mono font-bold text-neutral-600 pr-6 w-20 text-right z-10 py-2">
+                      <span>${(maxPnL / 1000).toFixed(1)}k</span>
+                      <span>${(maxPnL * 0.75 / 1000).toFixed(1)}k</span>
+                      <span>${(maxPnL * 0.5 / 1000).toFixed(1)}k</span>
+                      <span>${(maxPnL * 0.25 / 1000).toFixed(1)}k</span>
                       <span className="text-neutral-400">$0.0</span>
                     </div>
                     <div className={cn(
-                      "relative flex-grow border-l border-b flex items-end px-3 pt-6 gap-[4px] rounded-br-sm",
+                      "relative flex-grow border-l border-b flex items-end px-2 pt-4 gap-[2px] rounded-br-sm",
                       isDark ? "border-white/10 bg-white/[0.01]" : "border-neutral-200 bg-neutral-50/50"
                     )}>
                       {/* Grid overlay */}
-                      <div className="absolute inset-0 flex px-3 gap-[4px] pointer-events-none">
-                        {[...Array(24)].map((_, i) => (
+                      <div className="absolute inset-0 flex px-2 gap-[2px] pointer-events-none">
+                        {pnlByTimeData.map((_, i) => (
                           <div key={i} className={cn("flex-1 border-r h-full last:border-r-0", isDark ? "border-white/[0.03]" : "border-neutral-200/30")} />
                         ))}
                       </div>
@@ -390,36 +364,39 @@ export default function Reports({ onNavigate, isDark, setIsDark, openTradeModal 
                       </div>
                       
                       {/* Bars */}
-                      {[0, 0, 0, 0, 0, 0, 0, 75, 95, 45, 65, 55, 25, 15, 75, 65, 45, 0, 0, 0, 0, 0, 0, 0].map((h, i) => (
-                        <div 
-                          key={`pl-bar-${i}`}
-                          onMouseEnter={() => setHoveredBar({ type: 'pl', index: i, value: `$${(h * 220 * multiplier).toFixed(2)}`, time: `${i.toString().padStart(2, '0')}:00` })}
-                          onMouseLeave={() => setHoveredBar(null)}
-                          className="flex-1 bg-gradient-to-t from-[#00FF41]/20 to-[#00FF41] hover:from-[#00FF41]/40 hover:to-[#00FF41] rounded-t-[2px] transition-all duration-300 relative group cursor-crosshair z-10"
-                          style={{ height: `${h}%` }}
-                        >
-                          {hoveredBar?.type === 'pl' && hoveredBar.index === i && (
-                            <div className={cn(
-                              "absolute left-1/2 -translate-x-1/2 p-4 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] z-50 min-w-[160px] pointer-events-none backdrop-blur-2xl border transition-all duration-300",
-                              h > 60 ? "top-4" : "-top-24",
-                              isDark ? "bg-black/60 border-white/10" : "bg-white/70 border-neutral-200 shadow-xl"
-                            )}>
-                              <div className="flex items-center gap-2 mb-2">
-                                <div className="w-1.5 h-1.5 rounded-full bg-[#00FF41] animate-pulse" />
-                                <p className="text-[9px] text-neutral-500 font-bold uppercase tracking-[0.2em]">P&L - {hoveredBar.time}</p>
+                      {pnlByTimeData.map((d, i) => {
+                        const h = (Math.abs(d.pnl) / maxPnL) * 100;
+                        return (
+                          <div 
+                            key={`pl-bar-${i}`}
+                            onMouseEnter={() => setHoveredBar({ type: 'pl', index: i, value: `$${d.pnl.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, time: d.label })}
+                            onMouseLeave={() => setHoveredBar(null)}
+                            className="flex-1 bg-gradient-to-t from-[#00FF41]/20 to-[#00FF41] hover:from-[#00FF41]/40 hover:to-[#00FF41] rounded-t-[1px] transition-all duration-300 relative group cursor-crosshair z-10"
+                            style={{ height: `${h}%` }}
+                          >
+                            {hoveredBar?.type === 'pl' && hoveredBar.index === i && (
+                              <div className={cn(
+                                "absolute left-1/2 -translate-x-1/2 p-3 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] z-50 min-w-[140px] pointer-events-none backdrop-blur-2xl border transition-all duration-300",
+                                h > 60 ? "top-2" : "-top-20",
+                                isDark ? "bg-black/60 border-white/10" : "bg-white/70 border-neutral-200 shadow-xl"
+                              )}>
+                                <div className="flex items-center gap-1.5 mb-1.5">
+                                  <div className="w-1 h-1 rounded-full bg-[#00FF41] animate-pulse" />
+                                  <p className="text-[8px] text-neutral-500 font-bold uppercase tracking-[0.2em]">P&L - {hoveredBar.time}</p>
+                                </div>
+                                <p className={cn("text-lg font-black font-mono tracking-tighter leading-none", isDark ? "text-white" : "text-black")}>{hoveredBar.value}</p>
                               </div>
-                              <p className={cn("text-xl font-black font-mono tracking-tighter leading-none", isDark ? "text-white" : "text-black")}>{hoveredBar.value}</p>
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                   {/* X-Axis Labels */}
-                  <div className="flex ml-24 mt-8 h-8 items-start">
-                    <div className="flex-grow flex justify-between px-3">
+                  <div className="flex ml-20 mt-6 h-6 items-start">
+                    <div className="flex-grow flex justify-between px-2">
                       {["00:00", "04:00", "08:00", "12:00", "16:00", "20:00"].map((time, i) => (
-                        <span key={`pl-label-${i}`} className="text-[9px] font-mono font-black text-neutral-600 uppercase tracking-widest">{time}</span>
+                        <span key={`pl-label-${i}`} className="text-[8px] font-mono font-black text-neutral-600 uppercase tracking-widest">{time}</span>
                       ))}
                     </div>
                   </div>
@@ -427,30 +404,30 @@ export default function Reports({ onNavigate, isDark, setIsDark, openTradeModal 
 
                 {/* Trade Distribution By Time */}
                 <div className={cn(
-                  "rounded-2xl border p-8 flex flex-col min-h-[520px] group transition-all duration-500",
+                  "rounded-xl border p-5 flex flex-col min-h-[420px] group transition-all duration-500",
                   isDark ? "bg-[#0a0a0a] border-white/5 hover:border-white/10" : "bg-white border-neutral-200 hover:border-neutral-300 shadow-sm"
                 )}>
-                  <div className="flex justify-between items-start mb-12">
-                    <div className="space-y-2">
-                      <h2 className="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-500 font-mono">Volume Analysis</h2>
-                      <p className={cn("text-xl font-serif italic leading-none", isDark ? "text-white" : "text-black")}>Trade Distribution</p>
+                  <div className="flex justify-between items-start mb-8">
+                    <div className="space-y-1">
+                      <h2 className="text-[8px] font-bold uppercase tracking-[0.3em] text-neutral-500 font-mono">Volume Analysis</h2>
+                      <p className={cn("text-base font-serif italic leading-none", isDark ? "text-white" : "text-black")}>Trade Distribution</p>
                     </div>
                   </div>
                   <div className="relative flex-grow flex">
-                    <div className="flex flex-col justify-between text-[10px] font-mono font-bold text-neutral-600 pr-8 w-24 text-right z-10 py-2">
-                      <span>{(36.0 * multiplier).toFixed(1)}</span>
-                      <span>{(27.0 * multiplier).toFixed(1)}</span>
-                      <span>{(18.0 * multiplier).toFixed(1)}</span>
-                      <span>{(9.0 * multiplier).toFixed(1)}</span>
+                    <div className="flex flex-col justify-between text-[9px] font-mono font-bold text-neutral-600 pr-6 w-20 text-right z-10 py-2">
+                      <span>{maxTrades.toFixed(1)}</span>
+                      <span>{(maxTrades * 0.75).toFixed(1)}</span>
+                      <span>{(maxTrades * 0.5).toFixed(1)}</span>
+                      <span>{(maxTrades * 0.25).toFixed(1)}</span>
                       <span className="text-neutral-400">0.0</span>
                     </div>
                     <div className={cn(
-                      "relative flex-grow border-l border-b flex items-end px-3 pt-6 gap-[4px] rounded-br-sm",
+                      "relative flex-grow border-l border-b flex items-end px-2 pt-4 gap-[2px] rounded-br-sm",
                       isDark ? "border-white/10 bg-white/[0.01]" : "border-neutral-200 bg-neutral-50/50"
                     )}>
                       {/* Grid overlay */}
-                      <div className="absolute inset-0 flex px-3 gap-[4px] pointer-events-none">
-                        {[...Array(24)].map((_, i) => (
+                      <div className="absolute inset-0 flex px-2 gap-[2px] pointer-events-none">
+                        {pnlByTimeData.map((_, i) => (
                           <div key={i} className={cn("flex-1 border-r h-full last:border-r-0", isDark ? "border-white/[0.03]" : "border-neutral-200/30")} />
                         ))}
                       </div>
@@ -461,36 +438,39 @@ export default function Reports({ onNavigate, isDark, setIsDark, openTradeModal 
                       </div>
 
                       {/* Bars */}
-                      {[0, 0, 0, 0, 0, 0, 0, 75, 70, 60, 60, 95, 80, 65, 75, 55, 65, 0, 0, 0, 0, 0, 0, 0].map((h, i) => (
-                        <div 
-                          key={`dist-bar-${i}`}
-                          onMouseEnter={() => setHoveredBar({ type: 'dist', index: i, value: Math.round(h * 0.36 * multiplier).toString(), time: `${i.toString().padStart(2, '0')}:00` })}
-                          onMouseLeave={() => setHoveredBar(null)}
-                          className="flex-1 bg-gradient-to-t from-[#00BCD4]/20 to-[#00BCD4] hover:from-[#00BCD4]/40 hover:to-[#00BCD4] rounded-t-[2px] transition-all duration-300 relative group cursor-crosshair z-10"
-                          style={{ height: `${h}%` }}
-                        >
-                          {hoveredBar?.type === 'dist' && hoveredBar.index === i && (
-                            <div className={cn(
-                              "absolute left-1/2 -translate-x-1/2 p-4 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] z-50 min-w-[160px] pointer-events-none backdrop-blur-2xl border transition-all duration-300",
-                              h > 60 ? "top-4" : "-top-24",
-                              isDark ? "bg-black/60 border-white/10" : "bg-white/70 border-neutral-200 shadow-xl"
-                            )}>
-                              <div className="flex items-center gap-2 mb-2">
-                                <div className="w-1.5 h-1.5 rounded-full bg-[#00BCD4] animate-pulse" />
-                                <p className="text-[9px] text-neutral-500 font-bold uppercase tracking-[0.2em]">Trades - {hoveredBar.time}</p>
+                      {pnlByTimeData.map((d, i) => {
+                        const h = (d.tradeCount / maxTrades) * 100;
+                        return (
+                          <div 
+                            key={`dist-bar-${i}`}
+                            onMouseEnter={() => setHoveredBar({ type: 'dist', index: i, value: d.tradeCount.toString(), time: d.label })}
+                            onMouseLeave={() => setHoveredBar(null)}
+                            className="flex-1 bg-gradient-to-t from-[#00BCD4]/20 to-[#00BCD4] hover:from-[#00BCD4]/40 hover:to-[#00BCD4] rounded-t-[1px] transition-all duration-300 relative group cursor-crosshair z-10"
+                            style={{ height: `${h}%` }}
+                          >
+                            {hoveredBar?.type === 'dist' && hoveredBar.index === i && (
+                              <div className={cn(
+                                "absolute left-1/2 -translate-x-1/2 p-3 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] z-50 min-w-[140px] pointer-events-none backdrop-blur-2xl border transition-all duration-300",
+                                h > 60 ? "top-2" : "-top-20",
+                                isDark ? "bg-black/60 border-white/10" : "bg-white/70 border-neutral-200 shadow-xl"
+                              )}>
+                                <div className="flex items-center gap-1.5 mb-1.5">
+                                  <div className="w-1 h-1 rounded-full bg-[#00BCD4] animate-pulse" />
+                                  <p className="text-[8px] text-neutral-500 font-bold uppercase tracking-[0.2em]">Trades - {hoveredBar.time}</p>
+                                </div>
+                                <p className={cn("text-lg font-black font-mono tracking-tighter leading-none", isDark ? "text-white" : "text-black")}>{hoveredBar.value}</p>
                               </div>
-                              <p className={cn("text-xl font-black font-mono tracking-tighter leading-none", isDark ? "text-white" : "text-black")}>{hoveredBar.value}</p>
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                   {/* X-Axis Labels */}
-                  <div className="flex ml-24 mt-8 h-8 items-start">
-                    <div className="flex-grow flex justify-between px-3">
+                  <div className="flex ml-20 mt-6 h-6 items-start">
+                    <div className="flex-grow flex justify-between px-2">
                       {["00:00", "04:00", "08:00", "12:00", "16:00", "20:00"].map((time, i) => (
-                        <span key={`dist-label-${i}`} className="text-[9px] font-mono font-black text-neutral-600 uppercase tracking-widest">{time}</span>
+                        <span key={`dist-label-${i}`} className="text-[8px] font-mono font-black text-neutral-600 uppercase tracking-widest">{time}</span>
                       ))}
                     </div>
                   </div>
@@ -500,25 +480,25 @@ export default function Reports({ onNavigate, isDark, setIsDark, openTradeModal 
               <>
                 {/* P&L By Day */}
                 <div className={cn(
-                  "rounded-2xl border p-8 flex flex-col min-h-[520px] group transition-all duration-500",
+                  "rounded-xl border p-5 flex flex-col min-h-[420px] group transition-all duration-500",
                   isDark ? "bg-[#0a0a0a] border-white/5 hover:border-white/10" : "bg-white border-neutral-200 hover:border-neutral-300 shadow-sm"
                 )}>
-                  <div className="flex justify-between items-start mb-12">
-                    <div className="space-y-2">
-                      <h2 className="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-500 font-mono">Performance Matrix</h2>
-                      <p className={cn("text-xl font-serif italic leading-none", isDark ? "text-white" : "text-black")}>P&L By Day of Week</p>
+                  <div className="flex justify-between items-start mb-8">
+                    <div className="space-y-1">
+                      <h2 className="text-[8px] font-bold uppercase tracking-[0.3em] text-neutral-500 font-mono">Performance Matrix</h2>
+                      <p className={cn("text-lg font-serif italic leading-none", isDark ? "text-white" : "text-black")}>P&L By Day of Week</p>
                     </div>
-                    <div className={cn("flex rounded-xl p-1 border shadow-inner", isDark ? "bg-black border-white/5" : "bg-neutral-100 border-neutral-200")}>
-                      <button className="px-4 py-1.5 text-[9px] font-bold uppercase tracking-widest text-neutral-500 rounded-lg hover:text-white transition-colors">Separate</button>
-                      <button className="px-4 py-1.5 text-[9px] font-bold uppercase tracking-widest bg-[#00FF41] text-black rounded-lg shadow-lg font-black">Total</button>
+                    <div className={cn("flex rounded-lg p-0.5 border shadow-inner", isDark ? "bg-black border-white/5" : "bg-neutral-100 border-neutral-200")}>
+                      <button className="px-3 py-1 text-[8px] font-bold uppercase tracking-widest text-neutral-500 rounded-md hover:text-white transition-colors">Separate</button>
+                      <button className="px-3 py-1 text-[8px] font-bold uppercase tracking-widest bg-[#00FF41] text-black rounded-md shadow-lg font-black">Total</button>
                     </div>
                   </div>
                   <div className="relative flex-grow flex">
                     <div className="flex flex-col justify-between text-[10px] font-mono font-bold text-neutral-600 pr-8 w-24 text-right z-10 py-2">
-                      <span>$36.0k</span>
-                      <span>$27.0k</span>
-                      <span>$18.0k</span>
-                      <span>$9.0k</span>
+                      <span>${(dayData.maxPnL / 1000).toFixed(1)}k</span>
+                      <span>${(dayData.maxPnL * 0.75 / 1000).toFixed(1)}k</span>
+                      <span>${(dayData.maxPnL * 0.5 / 1000).toFixed(1)}k</span>
+                      <span>${(dayData.maxPnL * 0.25 / 1000).toFixed(1)}k</span>
                       <span className="text-neutral-400">$0.0</span>
                     </div>
                     <div className={cn(
@@ -540,7 +520,7 @@ export default function Reports({ onNavigate, isDark, setIsDark, openTradeModal 
                       {dayData.pl.map((h, i) => (
                         <div 
                           key={`pl-day-bar-${i}`}
-                          onMouseEnter={() => setHoveredBar({ type: 'pl', index: i, value: `$${(h * 360).toFixed(2)}`, time: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][i] })}
+                          onMouseEnter={() => setHoveredBar({ type: 'pl', index: i, value: `$${(h * dayData.maxPnL / 100).toFixed(2)}`, time: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][i] })}
                           onMouseLeave={() => setHoveredBar(null)}
                           className="w-full max-w-[48px] bg-gradient-to-t from-[#00FF41]/20 to-[#00FF41] hover:from-[#00FF41]/40 hover:to-[#00FF41] transition-all duration-300 rounded-t-[2px] z-10 mx-1 relative group cursor-crosshair"
                           style={{ height: `${h}%` }}
@@ -571,21 +551,21 @@ export default function Reports({ onNavigate, isDark, setIsDark, openTradeModal 
 
                 {/* Trade Distribution By Day */}
                 <div className={cn(
-                  "rounded-2xl border p-8 flex flex-col min-h-[520px] group transition-all duration-500",
+                  "rounded-xl border p-5 flex flex-col min-h-[420px] group transition-all duration-500",
                   isDark ? "bg-[#0a0a0a] border-white/5 hover:border-white/10" : "bg-white border-neutral-200 hover:border-neutral-300 shadow-sm"
                 )}>
-                  <div className="flex justify-between items-start mb-12">
-                    <div className="space-y-2">
-                      <h2 className="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-500 font-mono">Volume Analysis</h2>
-                      <p className={cn("text-xl font-serif italic leading-none", isDark ? "text-white" : "text-black")}>By Day of Week</p>
+                  <div className="flex justify-between items-start mb-8">
+                    <div className="space-y-1">
+                      <h2 className="text-[8px] font-bold uppercase tracking-[0.3em] text-neutral-500 font-mono">Volume Analysis</h2>
+                      <p className={cn("text-lg font-serif italic leading-none", isDark ? "text-white" : "text-black")}>By Day of Week</p>
                     </div>
                   </div>
                   <div className="relative flex-grow flex">
                     <div className="flex flex-col justify-between text-[10px] font-mono font-bold text-neutral-600 pr-8 w-24 text-right z-10 py-2">
-                      <span>60.0</span>
-                      <span>45.0</span>
-                      <span>30.0</span>
-                      <span>15.0</span>
+                      <span>{dayData.maxTrades.toFixed(1)}</span>
+                      <span>{(dayData.maxTrades * 0.75).toFixed(1)}</span>
+                      <span>{(dayData.maxTrades * 0.5).toFixed(1)}</span>
+                      <span>{(dayData.maxTrades * 0.25).toFixed(1)}</span>
                       <span className="text-neutral-400">0.0</span>
                     </div>
                     <div className={cn(
@@ -607,7 +587,7 @@ export default function Reports({ onNavigate, isDark, setIsDark, openTradeModal 
                       {dayData.dist.map((h, i) => (
                         <div 
                           key={`dist-day-bar-${i}`}
-                          onMouseEnter={() => setHoveredBar({ type: 'dist', index: i, value: Math.round(h * 0.6).toString(), time: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][i] })}
+                          onMouseEnter={() => setHoveredBar({ type: 'dist', index: i, value: Math.round(h * dayData.maxTrades / 100).toString(), time: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][i] })}
                           onMouseLeave={() => setHoveredBar(null)}
                           className="w-full max-w-[48px] bg-gradient-to-t from-[#00BCD4]/20 to-[#00BCD4] hover:from-[#00BCD4]/40 hover:to-[#00BCD4] transition-all duration-300 rounded-t-[2px] z-10 mx-1 relative group cursor-crosshair"
                           style={{ height: `${h}%` }}
@@ -640,25 +620,25 @@ export default function Reports({ onNavigate, isDark, setIsDark, openTradeModal 
               <>
                 {/* P&L By Month */}
                 <div className={cn(
-                  "rounded-2xl border p-8 flex flex-col min-h-[520px] group transition-all duration-500",
+                  "rounded-xl border p-5 flex flex-col min-h-[420px] group transition-all duration-500",
                   isDark ? "bg-[#0a0a0a] border-white/5 hover:border-white/10" : "bg-white border-neutral-200 hover:border-neutral-300 shadow-sm"
                 )}>
-                  <div className="flex justify-between items-start mb-12">
-                    <div className="space-y-2">
-                      <h2 className="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-500 font-mono">Performance Matrix</h2>
-                      <p className={cn("text-xl font-serif italic leading-none", isDark ? "text-white" : "text-black")}>P&L By Month</p>
+                  <div className="flex justify-between items-start mb-8">
+                    <div className="space-y-1">
+                      <h2 className="text-[8px] font-bold uppercase tracking-[0.3em] text-neutral-500 font-mono">Performance Matrix</h2>
+                      <p className={cn("text-lg font-serif italic leading-none", isDark ? "text-white" : "text-black")}>P&L By Month</p>
                     </div>
-                    <div className={cn("flex rounded-xl p-1 border shadow-inner", isDark ? "bg-black border-white/5" : "bg-neutral-100 border-neutral-200")}>
-                      <button className="px-4 py-1.5 text-[9px] font-bold uppercase tracking-widest text-neutral-500 rounded-lg hover:text-white transition-colors">Separate</button>
-                      <button className="px-4 py-1.5 text-[9px] font-bold uppercase tracking-widest bg-[#00FF41] text-black rounded-lg shadow-lg font-black">Total</button>
+                    <div className={cn("flex rounded-lg p-0.5 border shadow-inner", isDark ? "bg-black border-white/5" : "bg-neutral-100 border-neutral-200")}>
+                      <button className="px-3 py-1 text-[8px] font-bold uppercase tracking-widest text-neutral-500 rounded-md hover:text-white transition-colors">Separate</button>
+                      <button className="px-3 py-1 text-[8px] font-bold uppercase tracking-widest bg-[#00FF41] text-black rounded-md shadow-lg font-black">Total</button>
                     </div>
                   </div>
                   <div className="relative flex-grow flex">
                     <div className="flex flex-col justify-between text-[10px] font-mono font-bold text-neutral-600 pr-8 w-24 text-right z-10 py-2">
-                      <span>$120.0k</span>
-                      <span>$90.0k</span>
-                      <span>$60.0k</span>
-                      <span>$30.0k</span>
+                      <span>${(monthData.maxP / 1000).toFixed(1)}k</span>
+                      <span>${(monthData.maxP * 0.75 / 1000).toFixed(1)}k</span>
+                      <span>${(monthData.maxP * 0.5 / 1000).toFixed(1)}k</span>
+                      <span>${(monthData.maxP * 0.25 / 1000).toFixed(1)}k</span>
                       <span className="text-neutral-400">$0.0</span>
                     </div>
                     <div className={cn(
@@ -680,7 +660,7 @@ export default function Reports({ onNavigate, isDark, setIsDark, openTradeModal 
                       {monthData.pl.map((h, i) => (
                         <div 
                           key={`pl-month-bar-${i}`}
-                          onMouseEnter={() => setHoveredBar({ type: 'pl', index: i, value: `$${(h * 1200).toFixed(2)}`, time: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][i] })}
+                          onMouseEnter={() => setHoveredBar({ type: 'pl', index: i, value: `$${(h * monthData.maxP / 100).toFixed(2)}`, time: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][i] })}
                           onMouseLeave={() => setHoveredBar(null)}
                           className="w-full max-w-[24px] bg-gradient-to-t from-[#00FF41]/20 to-[#00FF41] hover:from-[#00FF41]/40 hover:to-[#00FF41] transition-all duration-300 rounded-t-[2px] z-10 mx-0.5 relative group cursor-crosshair"
                           style={{ height: `${h}%` }}
@@ -711,21 +691,21 @@ export default function Reports({ onNavigate, isDark, setIsDark, openTradeModal 
 
                 {/* Trade Distribution By Month */}
                 <div className={cn(
-                  "rounded-2xl border p-8 flex flex-col min-h-[520px] group transition-all duration-500",
+                  "rounded-xl border p-5 flex flex-col min-h-[420px] group transition-all duration-500",
                   isDark ? "bg-[#0a0a0a] border-white/5 hover:border-white/10" : "bg-white border-neutral-200 hover:border-neutral-300 shadow-sm"
                 )}>
-                  <div className="flex justify-between items-start mb-12">
-                    <div className="space-y-2">
-                      <h2 className="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-500 font-mono">Volume Analysis</h2>
-                      <p className={cn("text-xl font-serif italic leading-none", isDark ? "text-white" : "text-black")}>By Month</p>
+                  <div className="flex justify-between items-start mb-8">
+                    <div className="space-y-1">
+                      <h2 className="text-[8px] font-bold uppercase tracking-[0.3em] text-neutral-500 font-mono">Volume Analysis</h2>
+                      <p className={cn("text-lg font-serif italic leading-none", isDark ? "text-white" : "text-black")}>By Month</p>
                     </div>
                   </div>
                   <div className="relative flex-grow flex">
                     <div className="flex flex-col justify-between text-[10px] font-mono font-bold text-neutral-600 pr-8 w-24 text-right z-10 py-2">
-                      <span>200.0</span>
-                      <span>150.0</span>
-                      <span>100.0</span>
-                      <span>50.0</span>
+                      <span>{monthData.maxT.toFixed(1)}</span>
+                      <span>{(monthData.maxT * 0.75).toFixed(1)}</span>
+                      <span>{(monthData.maxT * 0.5).toFixed(1)}</span>
+                      <span>{(monthData.maxT * 0.25).toFixed(1)}</span>
                       <span className="text-neutral-400">0.0</span>
                     </div>
                     <div className={cn(
@@ -747,7 +727,7 @@ export default function Reports({ onNavigate, isDark, setIsDark, openTradeModal 
                       {monthData.dist.map((h, i) => (
                         <div 
                           key={`dist-month-bar-${i}`}
-                          onMouseEnter={() => setHoveredBar({ type: 'dist', index: i, value: Math.round(h * 2).toString(), time: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][i] })}
+                          onMouseEnter={() => setHoveredBar({ type: 'dist', index: i, value: Math.round(h * monthData.maxT / 100).toString(), time: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][i] })}
                           onMouseLeave={() => setHoveredBar(null)}
                           className="w-full max-w-[24px] bg-gradient-to-t from-[#00BCD4]/20 to-[#00BCD4] hover:from-[#00BCD4]/40 hover:to-[#00BCD4] transition-all duration-300 rounded-t-[2px] z-10 mx-0.5 relative group cursor-crosshair"
                           style={{ height: `${h}%` }}
@@ -780,25 +760,25 @@ export default function Reports({ onNavigate, isDark, setIsDark, openTradeModal 
               <>
                 {/* P&L By Symbol */}
                 <div className={cn(
-                  "rounded-2xl border p-8 flex flex-col min-h-[520px] group transition-all duration-500",
+                  "rounded-xl border p-5 flex flex-col min-h-[420px] group transition-all duration-500",
                   isDark ? "bg-[#0a0a0a] border-white/5 hover:border-white/10" : "bg-white border-neutral-200 hover:border-neutral-300 shadow-sm"
                 )}>
-                  <div className="flex justify-between items-start mb-12">
-                    <div className="space-y-2">
-                      <h2 className="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-500 font-mono">Performance Matrix</h2>
-                      <p className={cn("text-xl font-serif italic leading-none", isDark ? "text-white" : "text-black")}>P&L By Symbol</p>
+                  <div className="flex justify-between items-start mb-8">
+                    <div className="space-y-1">
+                      <h2 className="text-[8px] font-bold uppercase tracking-[0.3em] text-neutral-500 font-mono">Performance Matrix</h2>
+                      <p className={cn("text-lg font-serif italic leading-none", isDark ? "text-white" : "text-black")}>P&L By Symbol</p>
                     </div>
-                    <div className={cn("flex rounded-xl p-1 border shadow-inner", isDark ? "bg-black border-white/5" : "bg-neutral-100 border-neutral-200")}>
-                      <button className="px-4 py-1.5 text-[9px] font-bold uppercase tracking-widest text-neutral-500 rounded-lg hover:text-white transition-colors">Separate</button>
-                      <button className="px-4 py-1.5 text-[9px] font-bold uppercase tracking-widest bg-[#00FF41] text-black rounded-lg shadow-lg font-black">Total</button>
+                    <div className={cn("flex rounded-lg p-0.5 border shadow-inner", isDark ? "bg-black border-white/5" : "bg-neutral-100 border-neutral-200")}>
+                      <button className="px-3 py-1 text-[8px] font-bold uppercase tracking-widest text-neutral-500 rounded-md hover:text-white transition-colors">Separate</button>
+                      <button className="px-3 py-1 text-[8px] font-bold uppercase tracking-widest bg-[#00FF41] text-black rounded-md shadow-lg font-black">Total</button>
                     </div>
                   </div>
                   <div className="relative flex-grow flex">
                     <div className="flex flex-col justify-between text-[10px] font-mono font-bold text-neutral-600 pr-8 w-24 text-right z-10 py-2">
-                      <span>$50.0k</span>
-                      <span>$37.5k</span>
-                      <span>$25.0k</span>
-                      <span>$12.5k</span>
+                      <span>${(symbolData.maxP / 1000).toFixed(1)}k</span>
+                      <span>${(symbolData.maxP * 0.75 / 1000).toFixed(1)}k</span>
+                      <span>${(symbolData.maxP * 0.5 / 1000).toFixed(1)}k</span>
+                      <span>${(symbolData.maxP * 0.25 / 1000).toFixed(1)}k</span>
                       <span className="text-neutral-400">$0.0</span>
                     </div>
                     <div className={cn(
@@ -820,7 +800,7 @@ export default function Reports({ onNavigate, isDark, setIsDark, openTradeModal 
                       {symbolData.pl.map((h, i) => (
                         <div 
                           key={`pl-symbol-bar-${i}`}
-                          onMouseEnter={() => setHoveredBar({ type: 'pl', index: i, value: `$${(h * 500).toFixed(2)}`, time: symbolData.overview[i]?.symbol || "N/A" })}
+                          onMouseEnter={() => setHoveredBar({ type: 'pl', index: i, value: `$${(h * symbolData.maxP / 100).toFixed(2)}`, time: symbolData.overview[i]?.symbol || "N/A" })}
                           onMouseLeave={() => setHoveredBar(null)}
                           className="w-full max-w-[64px] bg-gradient-to-t from-[#00FF41]/20 to-[#00FF41] hover:from-[#00FF41]/40 hover:to-[#00FF41] transition-all duration-300 rounded-t-[2px] z-10 mx-1 relative group cursor-crosshair"
                           style={{ height: `${h}%` }}
@@ -851,21 +831,21 @@ export default function Reports({ onNavigate, isDark, setIsDark, openTradeModal 
 
                 {/* Trade Distribution By Symbol */}
                 <div className={cn(
-                  "rounded-2xl border p-8 flex flex-col min-h-[520px] group transition-all duration-500",
+                  "rounded-xl border p-5 flex flex-col min-h-[420px] group transition-all duration-500",
                   isDark ? "bg-[#0a0a0a] border-white/5 hover:border-white/10" : "bg-white border-neutral-200 hover:border-neutral-300 shadow-sm"
                 )}>
-                  <div className="flex justify-between items-start mb-12">
-                    <div className="space-y-2">
-                      <h2 className="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-500 font-mono">Volume Analysis</h2>
-                      <p className={cn("text-xl font-serif italic leading-none", isDark ? "text-white" : "text-black")}>By Symbol</p>
+                  <div className="flex justify-between items-start mb-8">
+                    <div className="space-y-1">
+                      <h2 className="text-[8px] font-bold uppercase tracking-[0.3em] text-neutral-500 font-mono">Volume Analysis</h2>
+                      <p className={cn("text-lg font-serif italic leading-none", isDark ? "text-white" : "text-black")}>By Symbol</p>
                     </div>
                   </div>
                   <div className="relative flex-grow flex">
                     <div className="flex flex-col justify-between text-[10px] font-mono font-bold text-neutral-600 pr-8 w-24 text-right z-10 py-2">
-                      <span>100.0</span>
-                      <span>75.0</span>
-                      <span>50.0</span>
-                      <span>25.0</span>
+                      <span>{symbolData.maxT.toFixed(1)}</span>
+                      <span>{(symbolData.maxT * 0.75).toFixed(1)}</span>
+                      <span>{(symbolData.maxT * 0.5).toFixed(1)}</span>
+                      <span>{(symbolData.maxT * 0.25).toFixed(1)}</span>
                       <span className="text-neutral-400">0.0</span>
                     </div>
                     <div className={cn(
@@ -887,7 +867,7 @@ export default function Reports({ onNavigate, isDark, setIsDark, openTradeModal 
                       {symbolData.dist.map((h, i) => (
                         <div 
                           key={`dist-symbol-bar-${i}`}
-                          onMouseEnter={() => setHoveredBar({ type: 'dist', index: i, value: Math.round(h).toString(), time: symbolData.overview[i]?.symbol || "N/A" })}
+                          onMouseEnter={() => setHoveredBar({ type: 'dist', index: i, value: Math.round(h * symbolData.maxT / 100).toString(), time: symbolData.overview[i]?.symbol || "N/A" })}
                           onMouseLeave={() => setHoveredBar(null)}
                           className="w-full max-w-[64px] bg-gradient-to-t from-[#00BCD4]/20 to-[#00BCD4] hover:from-[#00BCD4]/40 hover:to-[#00BCD4] transition-all duration-300 rounded-t-[2px] z-10 mx-1 relative group cursor-crosshair"
                           style={{ height: `${h}%` }}
@@ -920,25 +900,25 @@ export default function Reports({ onNavigate, isDark, setIsDark, openTradeModal 
               <>
                 {/* P&L By Tags */}
                 <div className={cn(
-                  "rounded-2xl border p-8 flex flex-col min-h-[520px] group transition-all duration-500",
+                  "rounded-xl border p-5 flex flex-col min-h-[420px] group transition-all duration-500",
                   isDark ? "bg-[#0a0a0a] border-white/5 hover:border-white/10" : "bg-white border-neutral-200 hover:border-neutral-300 shadow-sm"
                 )}>
-                  <div className="flex justify-between items-start mb-12">
-                    <div className="space-y-2">
-                      <h2 className="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-500 font-mono">Performance Matrix</h2>
-                      <p className={cn("text-xl font-serif italic leading-none", isDark ? "text-white" : "text-black")}>P&L By Tags</p>
+                  <div className="flex justify-between items-start mb-8">
+                    <div className="space-y-1">
+                      <h2 className="text-[8px] font-bold uppercase tracking-[0.3em] text-neutral-500 font-mono">Performance Matrix</h2>
+                      <p className={cn("text-lg font-serif italic leading-none", isDark ? "text-white" : "text-black")}>P&L By Tags</p>
                     </div>
-                    <div className={cn("flex rounded-xl p-1 border shadow-inner", isDark ? "bg-black border-white/5" : "bg-neutral-100 border-neutral-200")}>
-                      <button className="px-4 py-1.5 text-[9px] font-bold uppercase tracking-widest text-neutral-500 rounded-lg hover:text-white transition-colors">Separate</button>
-                      <button className="px-4 py-1.5 text-[9px] font-bold uppercase tracking-widest bg-[#00FF41] text-black rounded-lg shadow-lg font-black">Total</button>
+                    <div className={cn("flex rounded-lg p-0.5 border shadow-inner", isDark ? "bg-black border-white/5" : "bg-neutral-100 border-neutral-200")}>
+                      <button className="px-3 py-1 text-[8px] font-bold uppercase tracking-widest text-neutral-500 rounded-md hover:text-white transition-colors">Separate</button>
+                      <button className="px-3 py-1 text-[8px] font-bold uppercase tracking-widest bg-[#00FF41] text-black rounded-md shadow-lg font-black">Total</button>
                     </div>
                   </div>
                   <div className="relative flex-grow flex">
                     <div className="flex flex-col justify-between text-[10px] font-mono font-bold text-neutral-600 pr-8 w-24 text-right z-10 py-2">
-                      <span>$40.0k</span>
-                      <span>$30.0k</span>
-                      <span>$20.0k</span>
-                      <span>$10.0k</span>
+                      <span>${(tagsData.maxP / 1000).toFixed(1)}k</span>
+                      <span>${(tagsData.maxP * 0.75 / 1000).toFixed(1)}k</span>
+                      <span>${(tagsData.maxP * 0.5 / 1000).toFixed(1)}k</span>
+                      <span>${(tagsData.maxP * 0.25 / 1000).toFixed(1)}k</span>
                       <span className="text-neutral-400">$0.0</span>
                     </div>
                     <div className={cn(
@@ -960,7 +940,7 @@ export default function Reports({ onNavigate, isDark, setIsDark, openTradeModal 
                       {tagsData.pl.map((h, i) => (
                         <div 
                           key={`pl-tag-bar-${i}`}
-                          onMouseEnter={() => setHoveredBar({ type: 'pl', index: i, value: `$${(h * 400).toFixed(2)}`, time: tagsData.overview[i]?.tag || "N/A" })}
+                          onMouseEnter={() => setHoveredBar({ type: 'pl', index: i, value: `$${(h * tagsData.maxP / 100).toFixed(2)}`, time: tagsData.overview[i]?.tag || "N/A" })}
                           onMouseLeave={() => setHoveredBar(null)}
                           className="w-full max-w-[80px] bg-gradient-to-t from-[#00FF41]/20 to-[#00FF41] hover:from-[#00FF41]/40 hover:to-[#00FF41] transition-all duration-300 rounded-t-[2px] z-10 mx-1 relative group cursor-crosshair"
                           style={{ height: `${h}%` }}
@@ -991,21 +971,21 @@ export default function Reports({ onNavigate, isDark, setIsDark, openTradeModal 
 
                 {/* Trade Distribution By Tags */}
                 <div className={cn(
-                  "rounded-2xl border p-8 flex flex-col min-h-[520px] group transition-all duration-500",
+                  "rounded-xl border p-5 flex flex-col min-h-[420px] group transition-all duration-500",
                   isDark ? "bg-[#0a0a0a] border-white/5 hover:border-white/10" : "bg-white border-neutral-200 hover:border-neutral-300 shadow-sm"
                 )}>
-                  <div className="flex justify-between items-start mb-12">
-                    <div className="space-y-2">
-                      <h2 className="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-500 font-mono">Volume Analysis</h2>
-                      <p className={cn("text-xl font-serif italic leading-none", isDark ? "text-white" : "text-black")}>By Tags</p>
+                  <div className="flex justify-between items-start mb-8">
+                    <div className="space-y-1">
+                      <h2 className="text-[8px] font-bold uppercase tracking-[0.3em] text-neutral-500 font-mono">Volume Analysis</h2>
+                      <p className={cn("text-lg font-serif italic leading-none", isDark ? "text-white" : "text-black")}>By Tags</p>
                     </div>
                   </div>
                   <div className="relative flex-grow flex">
                     <div className="flex flex-col justify-between text-[10px] font-mono font-bold text-neutral-600 pr-8 w-24 text-right z-10 py-2">
-                      <span>80.0</span>
-                      <span>60.0</span>
-                      <span>40.0</span>
-                      <span>20.0</span>
+                      <span>{tagsData.maxT.toFixed(1)}</span>
+                      <span>{(tagsData.maxT * 0.75).toFixed(1)}</span>
+                      <span>{(tagsData.maxT * 0.5).toFixed(1)}</span>
+                      <span>{(tagsData.maxT * 0.25).toFixed(1)}</span>
                       <span className="text-neutral-400">0.0</span>
                     </div>
                     <div className={cn(
@@ -1027,7 +1007,7 @@ export default function Reports({ onNavigate, isDark, setIsDark, openTradeModal 
                       {tagsData.dist.map((h, i) => (
                         <div 
                           key={`dist-tag-bar-${i}`}
-                          onMouseEnter={() => setHoveredBar({ type: 'dist', index: i, value: Math.round(h * 0.8).toString(), time: tagsData.overview[i]?.tag || "N/A" })}
+                          onMouseEnter={() => setHoveredBar({ type: 'dist', index: i, value: Math.round(h * tagsData.maxT / 100).toString(), time: tagsData.overview[i]?.tag || "N/A" })}
                           onMouseLeave={() => setHoveredBar(null)}
                           className="w-full max-w-[80px] bg-gradient-to-t from-[#00BCD4]/20 to-[#00BCD4] hover:from-[#00BCD4]/40 hover:to-[#00BCD4] transition-all duration-300 rounded-t-[2px] z-10 mx-1 relative group cursor-crosshair"
                           style={{ height: `${h}%` }}
@@ -1060,25 +1040,25 @@ export default function Reports({ onNavigate, isDark, setIsDark, openTradeModal 
               <>
                 {/* P&L By Setups */}
                 <div className={cn(
-                  "rounded-2xl border p-8 flex flex-col min-h-[520px] group transition-all duration-500",
+                  "rounded-xl border p-5 flex flex-col min-h-[420px] group transition-all duration-500",
                   isDark ? "bg-[#0a0a0a] border-white/5 hover:border-white/10" : "bg-white border-neutral-200 hover:border-neutral-300 shadow-sm"
                 )}>
-                  <div className="flex justify-between items-start mb-12">
-                    <div className="space-y-2">
-                      <h2 className="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-500 font-mono">Performance Matrix</h2>
-                      <p className={cn("text-xl font-serif italic leading-none", isDark ? "text-white" : "text-black")}>P&L By Setups</p>
+                  <div className="flex justify-between items-start mb-8">
+                    <div className="space-y-1">
+                      <h2 className="text-[8px] font-bold uppercase tracking-[0.3em] text-neutral-500 font-mono">Performance Matrix</h2>
+                      <p className={cn("text-lg font-serif italic leading-none", isDark ? "text-white" : "text-black")}>P&L By Setups</p>
                     </div>
-                    <div className={cn("flex rounded-xl p-1 border shadow-inner", isDark ? "bg-black border-white/5" : "bg-neutral-100 border-neutral-200")}>
-                      <button className="px-4 py-1.5 text-[9px] font-bold uppercase tracking-widest text-neutral-500 rounded-lg hover:text-white transition-colors">Separate</button>
-                      <button className="px-4 py-1.5 text-[9px] font-bold uppercase tracking-widest bg-[#00FF41] text-black rounded-lg shadow-lg font-black">Total</button>
+                    <div className={cn("flex rounded-lg p-0.5 border shadow-inner", isDark ? "bg-black border-white/5" : "bg-neutral-100 border-neutral-200")}>
+                      <button className="px-3 py-1 text-[8px] font-bold uppercase tracking-widest text-neutral-500 rounded-md hover:text-white transition-colors">Separate</button>
+                      <button className="px-3 py-1 text-[8px] font-bold uppercase tracking-widest bg-[#00FF41] text-black rounded-md shadow-lg font-black">Total</button>
                     </div>
                   </div>
                   <div className="relative flex-grow flex">
                     <div className="flex flex-col justify-between text-[10px] font-mono font-bold text-neutral-600 pr-8 w-24 text-right z-10 py-2">
-                      <span>$45.0k</span>
-                      <span>$33.7k</span>
-                      <span>$22.5k</span>
-                      <span>$11.2k</span>
+                      <span>${(setupsData.maxP / 1000).toFixed(1)}k</span>
+                      <span>${(setupsData.maxP * 0.75 / 1000).toFixed(1)}k</span>
+                      <span>${(setupsData.maxP * 0.5 / 1000).toFixed(1)}k</span>
+                      <span>${(setupsData.maxP * 0.25 / 1000).toFixed(1)}k</span>
                       <span className="text-neutral-400">$0.0</span>
                     </div>
                     <div className={cn(
@@ -1100,7 +1080,7 @@ export default function Reports({ onNavigate, isDark, setIsDark, openTradeModal 
                       {setupsData.pl.map((h, i) => (
                         <div 
                           key={`pl-setup-bar-${i}`}
-                          onMouseEnter={() => setHoveredBar({ type: 'pl', index: i, value: `$${(h * 450).toFixed(2)}`, time: setupsData.overview[i]?.setup || "N/A" })}
+                          onMouseEnter={() => setHoveredBar({ type: 'pl', index: i, value: `$${(h * setupsData.maxP / 100).toFixed(2)}`, time: setupsData.overview[i]?.setup || "N/A" })}
                           onMouseLeave={() => setHoveredBar(null)}
                           className="w-full max-w-[80px] bg-gradient-to-t from-[#00FF41]/20 to-[#00FF41] hover:from-[#00FF41]/40 hover:to-[#00FF41] transition-all duration-300 rounded-t-[2px] z-10 mx-1 relative group cursor-crosshair"
                           style={{ height: `${h}%` }}
@@ -1131,21 +1111,21 @@ export default function Reports({ onNavigate, isDark, setIsDark, openTradeModal 
 
                 {/* Trade Distribution By Setups */}
                 <div className={cn(
-                  "rounded-2xl border p-8 flex flex-col min-h-[520px] group transition-all duration-500",
+                  "rounded-xl border p-5 flex flex-col min-h-[420px] group transition-all duration-500",
                   isDark ? "bg-[#0a0a0a] border-white/5 hover:border-white/10" : "bg-white border-neutral-200 hover:border-neutral-300 shadow-sm"
                 )}>
-                  <div className="flex justify-between items-start mb-12">
-                    <div className="space-y-2">
-                      <h2 className="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-500 font-mono">Volume Analysis</h2>
-                      <p className={cn("text-xl font-serif italic leading-none", isDark ? "text-white" : "text-black")}>By Setups</p>
+                  <div className="flex justify-between items-start mb-8">
+                    <div className="space-y-1">
+                      <h2 className="text-[8px] font-bold uppercase tracking-[0.3em] text-neutral-500 font-mono">Volume Analysis</h2>
+                      <p className={cn("text-lg font-serif italic leading-none", isDark ? "text-white" : "text-black")}>By Setups</p>
                     </div>
                   </div>
                   <div className="relative flex-grow flex">
                     <div className="flex flex-col justify-between text-[10px] font-mono font-bold text-neutral-600 pr-8 w-24 text-right z-10 py-2">
-                      <span>90.0</span>
-                      <span>67.5</span>
-                      <span>45.0</span>
-                      <span>22.5</span>
+                      <span>{setupsData.maxT.toFixed(1)}</span>
+                      <span>{(setupsData.maxT * 0.75).toFixed(1)}</span>
+                      <span>{(setupsData.maxT * 0.5).toFixed(1)}</span>
+                      <span>{(setupsData.maxT * 0.25).toFixed(1)}</span>
                       <span className="text-neutral-400">0.0</span>
                     </div>
                     <div className={cn(
@@ -1167,7 +1147,7 @@ export default function Reports({ onNavigate, isDark, setIsDark, openTradeModal 
                       {setupsData.dist.map((h, i) => (
                         <div 
                           key={`dist-setup-bar-${i}`}
-                          onMouseEnter={() => setHoveredBar({ type: 'dist', index: i, value: Math.round(h * 0.9).toString(), time: setupsData.overview[i]?.setup || "N/A" })}
+                          onMouseEnter={() => setHoveredBar({ type: 'dist', index: i, value: Math.round(h * setupsData.maxT / 100).toString(), time: setupsData.overview[i]?.setup || "N/A" })}
                           onMouseLeave={() => setHoveredBar(null)}
                           className="w-full max-w-[80px] bg-gradient-to-t from-[#00BCD4]/20 to-[#00BCD4] hover:from-[#00BCD4]/40 hover:to-[#00BCD4] transition-all duration-300 rounded-t-[2px] z-10 mx-1 relative group cursor-crosshair"
                           style={{ height: `${h}%` }}
@@ -1210,12 +1190,17 @@ export default function Reports({ onNavigate, isDark, setIsDark, openTradeModal 
           {/* Stats Grid */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mt-12">
             {activeFilter === "Time" ? (
-              <>
-                <SummaryCard label="Peak Performance" value="09:00" subValue="+$20,450" subColor="text-[#00FF41]" subBg={isDark ? "bg-[#00FF41]/10" : "bg-green-50"} isDark={isDark} />
-                <SummaryCard label="Drawdown Zone" value="14:00" subValue="-$3,120" subColor="text-[#E01E37]" subBg={isDark ? "bg-[#E01E37]/10" : "bg-red-50"} isDark={isDark} />
-                <SummaryCard label="High Volume" value="07:00" subValue="30 TRADES" subColor="text-neutral-400" subBg={isDark ? "bg-white/5" : "bg-neutral-100"} isDark={isDark} />
-                <SummaryCard label="Low Volume" value="08:00" subValue="16 TRADES" subColor="text-neutral-400" subBg={isDark ? "bg-white/5" : "bg-neutral-100"} isDark={isDark} />
-              </>
+              timeSummary.map((stat, i) => (
+                <SummaryCard 
+                  key={i} 
+                  label={stat.label} 
+                  value={stat.value} 
+                  subValue={stat.subValue} 
+                  subColor={stat.color} 
+                  subBg={isDark ? "bg-white/5" : "bg-neutral-100"} 
+                  isDark={isDark}
+                />
+              ))
             ) : activeFilter === "Day" ? (
               dayData.summary.map((stat, i) => (
                 <SummaryCard 
@@ -1294,34 +1279,34 @@ export default function Reports({ onNavigate, isDark, setIsDark, openTradeModal 
               </button>
             </div>
             <div className={cn(
-              "border rounded-2xl overflow-hidden group transition-colors",
+              "border rounded-xl overflow-hidden group transition-colors",
               isDark ? "bg-[#0a0a0a] border-white/5 hover:border-white/10" : "bg-white border-neutral-200 hover:border-neutral-300 shadow-sm"
             )}>
               <table className="w-full text-left border-collapse">
                 <thead className={cn("border-b", isDark ? "bg-white/[0.02] border-white/5" : "bg-neutral-50 border-neutral-200")}>
                   <tr>
-                    <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 font-serif italic">{activeFilter === "Day" ? "Day" : activeFilter === "Month" ? "Month" : activeFilter === "Symbol" ? "Symbol" : activeFilter === "Tags" ? "Tag" : activeFilter === "Setups" ? "Setup" : "Time"}</th>
-                    <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 text-center font-serif italic">Total Trades</th>
-                    <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 text-center font-serif italic">Net Profits</th>
-                    <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 text-center font-serif italic">Win Rate</th>
-                    <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 text-right font-serif italic">W-L-BE</th>
+                    <th className="px-6 py-3 text-[9px] font-black uppercase tracking-[0.2em] text-neutral-500 font-serif italic">{activeFilter === "Day" ? "Day" : activeFilter === "Month" ? "Month" : activeFilter === "Symbol" ? "Symbol" : activeFilter === "Tags" ? "Tag" : activeFilter === "Setups" ? "Setup" : "Time"}</th>
+                    <th className="px-6 py-3 text-[9px] font-black uppercase tracking-[0.2em] text-neutral-500 text-center font-serif italic">Total Trades</th>
+                    <th className="px-6 py-3 text-[9px] font-black uppercase tracking-[0.2em] text-neutral-500 text-center font-serif italic">Net Profits</th>
+                    <th className="px-6 py-3 text-[9px] font-black uppercase tracking-[0.2em] text-neutral-500 text-center font-serif italic">Win Rate</th>
+                    <th className="px-6 py-3 text-[9px] font-black uppercase tracking-[0.2em] text-neutral-500 text-right font-serif italic">W-L-BE</th>
                   </tr>
                 </thead>
                 <tbody className={cn("divide-y", isDark ? "divide-white/5" : "divide-neutral-200")}>
                   {(activeFilter === "Day" ? dayData.overview : activeFilter === "Month" ? monthData.overview : activeFilter === "Symbol" ? symbolData.overview : activeFilter === "Tags" ? tagsData.overview : activeFilter === "Setups" ? setupsData.overview : overviewData).map((row: any, i) => (
                     <tr key={i} className={cn("transition-colors group/row", isDark ? "hover:bg-white/[0.03]" : "hover:bg-neutral-50")}>
-                      <td className={cn("px-8 py-4 text-xs font-bold transition-colors", isDark ? "text-neutral-400 group-hover/row:text-white" : "text-neutral-600 group-hover/row:text-black")}>{activeFilter === "Day" ? row.day : activeFilter === "Month" ? row.month : activeFilter === "Symbol" ? row.symbol : activeFilter === "Tags" ? row.tag : activeFilter === "Setups" ? row.setup : row.time}</td>
-                      <td className={cn("px-8 py-4 text-xs font-mono font-black text-center", isDark ? "text-neutral-300" : "text-neutral-600")}>{row.trades}</td>
-                      <td className={cn("px-8 py-4 text-xs font-mono font-black text-center", isDark ? "text-[#00FF41]" : "text-green-600")}>{row.profit}</td>
-                      <td className="px-8 py-4 text-xs font-bold text-center">
-                        <div className="flex items-center justify-center gap-4">
-                          <div className={cn("w-24 h-2 rounded-full overflow-hidden shadow-inner", isDark ? "bg-white/5" : "bg-neutral-100")}>
+                      <td className={cn("px-6 py-2.5 text-[11px] font-bold transition-colors", isDark ? "text-neutral-400 group-hover/row:text-white" : "text-neutral-600 group-hover/row:text-black")}>{activeFilter === "Day" ? row.day : activeFilter === "Month" ? row.month : activeFilter === "Symbol" ? row.symbol : activeFilter === "Tags" ? row.tag : activeFilter === "Setups" ? row.setup : row.time}</td>
+                      <td className={cn("px-6 py-2.5 text-[11px] font-mono font-black text-center", isDark ? "text-neutral-300" : "text-neutral-600")}>{row.trades}</td>
+                      <td className={cn("px-6 py-2.5 text-[11px] font-mono font-black text-center", "text-accent-green")}>{row.profit}</td>
+                      <td className="px-6 py-2.5 text-[11px] font-bold text-center">
+                        <div className="flex items-center justify-center gap-3">
+                          <div className={cn("w-20 h-1.5 rounded-full overflow-hidden shadow-inner", isDark ? "bg-white/5" : "bg-neutral-100")}>
                             <div className="h-full bg-gradient-to-r from-[#00FF41]/40 to-[#00FF41] shadow-[0_0_10px_rgba(0,255,65,0.3)]" style={{ width: row.winRate }}></div>
                           </div>
-                          <span className={cn("text-[10px] font-mono font-black", isDark ? "text-neutral-300" : "text-neutral-600")}>{row.winRate}</span>
+                          <span className={cn("text-[9px] font-mono font-black", isDark ? "text-neutral-300" : "text-neutral-600")}>{row.winRate}</span>
                         </div>
                       </td>
-                      <td className={cn("px-8 py-4 text-xs font-mono font-black text-right transition-colors", isDark ? "text-neutral-500 group-hover/row:text-neutral-300" : "text-neutral-400 group-hover/row:text-neutral-600")}>{row.wlb}</td>
+                      <td className={cn("px-6 py-2.5 text-[11px] font-mono font-black text-right transition-colors", isDark ? "text-neutral-500 group-hover/row:text-neutral-300" : "text-neutral-400 group-hover/row:text-neutral-600")}>{row.wlb}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1330,67 +1315,31 @@ export default function Reports({ onNavigate, isDark, setIsDark, openTradeModal 
           </div>
         </div>
 
-        {/* Floating Action Button */}
-        <motion.button
-          whileHover={{ scale: 1.1, rotate: 90 }}
-          whileTap={{ scale: 0.9 }}
-          onClick={openTradeModal}
-          className={cn(
-            "fixed bottom-8 right-8 w-14 h-14 rounded-full flex items-center justify-center shadow-2xl z-50 transition-colors",
-            isDark ? "bg-accent-green text-black hover:bg-accent-green-vibrant" : "bg-black text-white hover:bg-neutral-800"
-          )}
-        >
-          <TrendingUp size={24} />
-        </motion.button>
-      </main>
-
-      <style>{`
-      `}</style>
-    </div>
+        <style>{`
+        `}</style>
+      </div>
   );
 }
 
-function NavItem({ icon, label, active = false, onClick, isDark, isCollapsed }: { icon: ReactNode, label: string, active?: boolean, onClick?: () => void, isDark: boolean, isCollapsed?: boolean }) {
-  return (
-    <button 
-      onClick={onClick}
-      className={cn(
-        "w-full flex items-center transition-all duration-200 group rounded-xl overflow-hidden whitespace-nowrap",
-        isCollapsed ? "justify-center px-0 py-3" : "gap-3 px-4 py-3",
-        active 
-          ? (isDark ? "bg-white/10 text-accent-green" : "bg-neutral-100 text-black font-bold")
-          : (isDark ? "text-neutral-400 hover:text-white hover:bg-white/5" : "text-neutral-500 hover:text-black hover:bg-neutral-100")
-      )}
-    >
-      <span className={cn(
-        "transition-colors shrink-0",
-        active ? "text-accent-green" : "group-hover:text-accent-green"
-      )}>
-        {icon}
-      </span>
-      {!isCollapsed && <span className="text-sm font-medium tracking-tight">{label}</span>}
-    </button>
-  );
-}
 
 function SummaryCard({ label, value, subValue, subColor, subBg, isDark }: { label: string, value: string, subValue: string, subColor: string, subBg: string, isDark: boolean, key?: any }) {
   return (
     <motion.div 
-      whileHover={{ y: -5 }}
+      whileHover={{ y: -3 }}
       className={cn(
-        "border rounded-2xl p-8 flex flex-col justify-between h-40 transition-all duration-500 group relative overflow-hidden",
+        "border rounded-xl p-6 flex flex-col justify-between h-32 transition-all duration-500 group relative overflow-hidden",
         isDark ? "bg-[#0a0a0a] border-white/5 hover:border-white/20" : "bg-white border-neutral-200 hover:border-neutral-300 shadow-sm"
       )}
     >
       <div className={cn(
-        "absolute top-0 right-0 w-32 h-32 -mr-12 -mt-12 rounded-full blur-3xl transition-colors duration-700",
+        "absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full blur-3xl transition-colors duration-700",
         isDark ? "bg-white/[0.01] group-hover:bg-accent-green/5" : "bg-neutral-100 group-hover:bg-green-50"
       )} />
       
-      <span className={cn("text-[10px] font-bold uppercase tracking-[0.3em] relative z-10 font-mono", isDark ? "text-neutral-500" : "text-neutral-400")}>{label}</span>
+      <span className={cn("text-[9px] font-bold uppercase tracking-[0.3em] relative z-10 font-mono", isDark ? "text-neutral-500" : "text-neutral-400")}>{label}</span>
       <div className="flex justify-between items-end relative z-10">
-        <span className={cn("text-4xl font-black tracking-tighter transition-colors duration-500 font-mono", isDark ? "text-white group-hover:text-accent-green" : "text-black group-hover:text-green-600")}>{value}</span>
-        <div className={cn("px-3 py-1.5 rounded-lg text-[10px] font-black tracking-widest uppercase shadow-2xl backdrop-blur-md border", subColor, subBg, isDark ? "border-white/5" : "border-neutral-200")}>
+        <span className={cn("text-3xl font-black tracking-tighter transition-colors duration-500 font-mono", isDark ? "text-white group-hover:text-accent-green" : "text-black group-hover:text-accent-green")}>{value}</span>
+        <div className={cn("px-2 py-1 rounded-md text-[9px] font-black tracking-widest uppercase shadow-2xl backdrop-blur-md border", subColor, subBg, isDark ? "border-white/5" : "border-neutral-200")}>
           {subValue}
         </div>
       </div>

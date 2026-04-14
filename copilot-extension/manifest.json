@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "PB Trading Co-Pilot",
+  "version": "1.0",
+  "description": "Voice-activated trading assistant for NQ futures traders.",
+  "permissions": [
+    "storage",
+    "tts"
+  ],
+  "host_permissions": [
+    "https://generativelanguage.googleapis.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["styles.css"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  }
+}

@@ -1,0 +1,125 @@
+#sovereign-bridge-root {
+  position: fixed;
+  z-index: 999999;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  user-select: none;
+}
+
+#sovereign-bridge-button {
+  width: 50px;
+  height: 50px;
+  border-radius: 25px;
+  background: #00FF41;
+  box-shadow: 0 4px 12px rgba(0, 255, 65, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  transition: transform 0.2s;
+}
+
+#sovereign-bridge-button:hover {
+  transform: scale(1.05);
+}
+
+#sovereign-bridge-button:active {
+  cursor: grabbing;
+}
+
+#sovereign-bridge-button svg {
+  width: 24px;
+  height: 24px;
+  fill: #000;
+}
+
+#sovereign-bridge-panel {
+  position: absolute;
+  bottom: 60px;
+  right: 0;
+  width: 280px;
+  background: #0A0A0A;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  display: none;
+  flex-direction: column;
+  gap: 12px;
+  color: white;
+}
+
+#sovereign-bridge-panel.visible {
+  display: flex;
+}
+
+.sovereign-panel-header {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #00FF41;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sovereign-mic-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 0;
+}
+
+#sovereign-mic-btn {
+  width: 60px;
+  height: 60px;
+  border-radius: 30px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+#sovereign-mic-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: #00FF41;
+}
+
+#sovereign-mic-btn.listening {
+  background: rgba(0, 255, 65, 0.2);
+  border-color: #00FF41;
+  animation: sovereign-pulse 1.5s infinite;
+}
+
+#sovereign-mic-btn svg {
+  width: 24px;
+  height: 24px;
+  fill: white;
+}
+
+#sovereign-status-text {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: center;
+}
+
+#sovereign-response-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.9);
+  max-height: 150px;
+  overflow-y: auto;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+}
+
+@keyframes sovereign-pulse {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 255, 65, 0.4); }
+  70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(0, 255, 65, 0); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 255, 65, 0); }
+}

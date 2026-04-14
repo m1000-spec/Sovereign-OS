@@ -4,6 +4,33 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>My Google AI Studio App</title>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
+    <script>
+      // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+      const firebaseConfig = {
+        apiKey: "AIzaSyBGELULAZhpTAhUSw9Y4uFoiW8bFpAk9Fo",
+        authDomain: "trading-journal-22f3b.firebaseapp.com",
+        projectId: "trading-journal-22f3b",
+        storageBucket: "trading-journal-22f3b.firebasestorage.app",
+        messagingSenderId: "11103508360",
+        appId: "1:11103508360:web:6bdfaf406965ddf7858c3d",
+        measurementId: "G-N0VTNBJ8M3"
+      };
+
+      // Initialize Firebase
+      firebase.initializeApp(firebaseConfig);
+      const db = firebase.firestore();
+
+      function saveTrade(data) {
+        return db.collection('trades').add(data);
+      }
+
+      async function loadTrades() {
+        const snapshot = await db.collection('trades').get();
+        return snapshot.docs.map(doc => doc.data());
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
